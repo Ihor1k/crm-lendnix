@@ -1,0 +1,139 @@
+.app-shell__connect[data-create-pipeline] {
+  width: auto;
+  min-width: 168px;
+}
+
+.pl-table {
+  min-width: 1180px;
+
+  th:first-child,
+  td:first-child {
+    width: 220px;
+    max-width: 220px;
+  }
+
+  tbody tr.pl-row {
+    cursor: pointer;
+  }
+}
+
+a.pl-name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-icon-primary, #f5f5f5);
+  font-family: Inter, var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 18px;
+
+  &:hover {
+    color: var(--text-icon-primary, #f5f5f5);
+  }
+}
+
+.pl-flow {
+  width: 28px;
+  padding-left: 4px;
+  padding-right: 4px;
+  color: var(--text-icon-secondary, #999);
+  line-height: 0;
+
+  svg {
+    display: block;
+    width: 16px;
+    height: 16px;
+    margin: 0 auto;
+  }
+}
+
+.pl-run {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-family: Inter, var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 18px;
+  white-space: nowrap;
+
+  &.is-running {
+    color: #70adfd;
+    background: rgba(112, 173, 253, 0.1);
+  }
+
+  &.is-paused {
+    color: var(--text-icon-secondary, #999);
+    background: rgba(255, 255, 255, 0.04);
+  }
+}
+
+.ds-stat__icon--ok svg path[fill] {
+  fill: currentColor;
+}
+
+.pl-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 4px 16px 16px;
+
+  p {
+    color: var(--text-icon-tetriary, #666);
+    font-size: 13px;
+    font-weight: 400;
+    line-height: 18px;
+  }
+}
+
+.pl-pages {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+
+  button {
+    width: 32px;
+    height: 32px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    color: var(--text-icon-secondary, #999);
+    font-family: Inter, var(--font-sans);
+    font-size: 13px;
+    font-weight: 500;
+
+    svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    &:hover:not(:disabled) {
+      color: #f5f5f5;
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    &.is-active {
+      color: #fff;
+      background: var(--Brand-500, #7b65ff);
+    }
+
+    &:disabled {
+      opacity: 0.35;
+      pointer-events: none;
+    }
+  }
+}
+
+.pl-pages__gap {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  color: var(--text-icon-secondary, #999);
+  font-size: 13px;
+}
