@@ -1,69 +1,13 @@
 import { AppShell, bindAppShell } from "../layout/AppShell.js";
 import { icons } from "../layout/icons.js";
 import { escapeHtml, escapeHtmlAttr } from "../utils/escapeHtml.js";
-
-const INITIAL_SOURCES = [
-  {
-    id: "payments",
-    name: "Payments Database",
-    type: "PostgreSQL",
-    status: "Healthy",
-    mode: "Real-time",
-    owner: "-",
-    lastSync: "-",
-    records: "1.8M records",
-  },
-  {
-    id: "crm",
-    name: "CRM System",
-    type: "REST API",
-    status: "Healthy",
-    mode: "Every 15 minutes",
-    owner: "-",
-    lastSync: "-",
-    records: "84K records",
-  },
-  {
-    id: "mobile",
-    name: "Mobile Application",
-    type: "Kafka",
-    status: "Healthy",
-    mode: "Real-time",
-    owner: "-",
-    lastSync: "-",
-    records: "4.6M events",
-  },
-  {
-    id: "partner",
-    name: "Partner API",
-    type: "REST API",
-    status: "Warning",
-    mode: "Hourly",
-    owner: "-",
-    lastSync: "-",
-    records: "-",
-  },
-  {
-    id: "bonus",
-    name: "Bonus Service",
-    type: "PostgreSQL",
-    status: "Failed",
-    mode: "Every 30 minutes",
-    owner: "-",
-    lastSync: "-",
-    records: "-",
-  },
-  {
-    id: "crm",
-    name: "CRM System",
-    type: "REST API",
-    status: "Healthy",
-    mode: "Every 15 minutes",
-    owner: "-",
-    lastSync: "-",
-    records: "84K records",
-  },
-];
+import {
+  getSource,
+  listSources,
+  removeSource,
+  updateSource,
+  upsertSource,
+} from "../data/sources.js";
 
 const SOURCE_TYPES = ["PostgreSQL", "MySQL", "REST API", "Kafka", "S3", "CSV Upload"];
 const OWNERS = ["Alex Owner", "Jordan Diaz", "Sam Rivera"];
@@ -216,7 +160,6 @@ function inputMarkup(key, label, { required = true, placeholder = label, type = 
 }
 
 export function DataSourcePage({ currentRoute = "/data-sources" } = {}) {
-  let sources = INITIAL_SOURCES.map((item) => ({ ...item }));
   let query = "";
   let filters = { type: "", status: "", mode: "", owner: "" };
   let connectForm = { ...EMPTY_CONNECT_FORM };
@@ -231,6 +174,7 @@ export function DataSourcePage({ currentRoute = "/data-sources" } = {}) {
   let abort;
 
   function counts() {
+    const sources = listSources();
     if (!sources.length) {
       return { total: "—", healthy: "—", warning: "—", failed: "—" };
     }
@@ -244,7 +188,7 @@ export function DataSourcePage({ currentRoute = "/data-sources" } = {}) {
 
   function visibleSources() {
     const q = query.trim().toLowerCase();
-    return sources.filter((item) => {
+    return listSources().filter((item) => {
       const ownerMatch =
         !filters.owner ||
         (filters.owner === "Unassigned" && (!item.owner || item.owner === "-")) ||
@@ -564,7 +508,7 @@ export function DataSourcePage({ currentRoute = "/data-sources" } = {}) {
   }
 
   function pageMarkup() {
-    const isEmpty = sources.length === 0;
+    const isEmpty = listSources().length === 0;
     return `
       <div class="ds-page">
         <section class="ds-stats">${statsMarkup()}</section>
@@ -924,7 +868,7 @@ export function DataSourcePage({ currentRoute = "/data-sources" } = {}) {
     const base = slugify(name);
     let id = base;
     let index = 2;
-    while (sources.some((item) => item.id === id)) {
+    while (listSources().some((item) => item.id === id)) {
       id = `${base}-${index}`;
       index += 1;
     }
@@ -989,26 +933,24 @@ export function DataSourcePage({ currentRoute = "/data-sources" } = {}) {
       }
     }
     if (editingSourceId) {
-      sources = sources.map((item) => (
-        item.id === editingSourceId
-          ? { ...item, ...sourcePayload(name) }
-          : item
-      ));
+      const existing = getSource(editingSourceId);
+      upsertSource({
+        ...existing,
+        ...sourcePayload(name),
+        id: editingSourceId,
+      });
       closeConnect(root);
       syncPage(root);
       showToast(root, `${name} saved.`);
       return;
     }
-    sources = [
-      {
-        id: uniqueSourceId(name),
-        status: "Healthy",
-        lastSync: "-",
-        records: "-",
-        ...sourcePayload(name),
-      },
-      ...sources,
-    ];
+    upsertSource({
+      id: uniqueSourceId(name),
+      status: "Healthy",
+      lastSync: "-",
+      records: "-",
+      ...sourcePayload(name),
+    });
     closeConnect(root);
     syncPage(root);
     showToast(root, `${name} connected.`);
@@ -1018,7 +960,7 @@ export function DataSourcePage({ currentRoute = "/data-sources" } = {}) {
     if (!editingSourceId) return;
     const source = findSource(editingSourceId);
     const name = source?.name || "Source";
-    sources = sources.filter((item) => item.id !== editingSourceId);
+    removeSource(editingSourceId);
     closeConnect(root);
     syncPage(root);
     showToast(root, `${name} deleted.`);
@@ -1033,7 +975,7 @@ export function DataSourcePage({ currentRoute = "/data-sources" } = {}) {
   }
 
   function syncEmpty(root) {
-    const isEmpty = sources.length === 0;
+    const isEmpty = listSources().length === 0;
     const emptyEl = root.querySelector("[data-ds-empty]");
     const listEl = root.querySelector("[data-ds-list]");
     if (emptyEl) emptyEl.hidden = !isEmpty;
@@ -1080,7 +1022,7 @@ export function DataSourcePage({ currentRoute = "/data-sources" } = {}) {
   }
 
   function findSource(id) {
-    return sources.find((item) => item.id === id);
+    return getSource(id);
   }
 
   function bindPage(root) {
@@ -1250,11 +1192,13 @@ export function DataSourcePage({ currentRoute = "/data-sources" } = {}) {
           return;
         }
         if (action === "disable") {
+          updateSource(id, { status: "Disabled" });
+          syncPage(root);
           showToast(root, `${source.name} disabled.`);
           return;
         }
         if (action === "delete") {
-          sources = sources.filter((item) => item.id !== id);
+          removeSource(id);
           syncPage(root);
           showToast(root, `${source.name} deleted.`);
         }

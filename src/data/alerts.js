@@ -1,3 +1,5 @@
+import { loadJSON, saveJSON } from "../utils/persist.js";
+
 export const ALERT_SEVERITIES = ["All", "Critical", "High", "Medium", "Resolved"];
 export const ALERT_STATUSES = ["All", "Active", "Resolved"];
 export const ALERT_TYPES = ["All", "Lag", "Latency", "Quality", "Pipeline", "Freshness"];
@@ -62,7 +64,7 @@ export const ALERT_RECIPIENTS = [
   "Emma Wilson",
 ];
 
-export const ALERT_ROWS = [
+export const ALERT_SEED = [
   {
     id: "a1",
     topic: "Consumer Lag Increased",
@@ -160,3 +162,63 @@ export const ALERT_ROWS = [
     owner: "Aaron Warner",
   },
 ];
+
+const storedAlerts = loadJSON("alerts", null);
+const alerts = Array.isArray(storedAlerts)
+  ? storedAlerts.map((item) => ({ ...item }))
+  : ALERT_SEED.map((item) => ({ ...item }));
+
+function persistAlerts() {
+  saveJSON("alerts", alerts);
+}
+
+export function listAlerts() {
+  return alerts;
+}
+
+/** @deprecated Prefer listAlerts() */
+export const ALERT_ROWS = alerts;
+
+export function createAlert(input = {}) {
+  const now = new Date();
+  const triggered = now.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const threshold = [input.condition, input.threshold].filter(Boolean).join(" ").trim() || "—";
+  const alert = {
+    id: `a-${now.getTime()}`,
+    topic: String(input.name || "New Alert").trim() || "New Alert",
+    severity: input.severity || "Medium",
+    relatedObject: input.relatedObject || input.metric || "Platform",
+    type: input.type || "Pipeline",
+    currentValue: "—",
+    threshold,
+    status: "Active",
+    triggered,
+    owner: input.recipients || input.owner || "Aaron Warner",
+    channel: input.channel || "platform",
+    metric: input.metric || "",
+  };
+  alerts.unshift(alert);
+  persistAlerts();
+  return alert;
+}
+
+export function updateAlert(id, patch) {
+  const index = alerts.findIndex((item) => item.id === id);
+  if (index < 0) return null;
+  alerts[index] = { ...alerts[index], ...patch };
+  persistAlerts();
+  return alerts[index];
+}
+
+export function removeAlert(id) {
+  const index = alerts.findIndex((item) => item.id === id);
+  if (index < 0) return;
+  alerts.splice(index, 1);
+  persistAlerts();
+}

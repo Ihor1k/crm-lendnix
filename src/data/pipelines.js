@@ -1,3 +1,5 @@
+import { loadJSON, saveJSON } from "../utils/persist.js";
+
 export const PIPELINE_OWNERS = ["Alex Morgan", "Emma Wilson", "Daniel Lee", "Michael Ross", "Noah Taylor"];
 export const PIPELINE_SOURCES = [
   "Mobile Application",
@@ -194,8 +196,15 @@ const SEED = [
   },
 ];
 
-let pipelines = SEED.map((item) => ({ ...item }));
-let createdCount = 0;
+const stored = loadJSON("pipelines", null);
+let pipelines = Array.isArray(stored?.items)
+  ? stored.items.map((item) => ({ ...item }))
+  : SEED.map((item) => ({ ...item }));
+let createdCount = Number(stored?.createdCount) || 0;
+
+function persist() {
+  saveJSON("pipelines", { items: pipelines, createdCount });
+}
 
 export function listPipelines() {
   return pipelines;
@@ -207,6 +216,7 @@ export function getPipeline(id) {
 
 export function addPipeline(pipeline) {
   pipelines = [pipeline, ...pipelines];
+  persist();
   return pipeline;
 }
 
@@ -214,20 +224,24 @@ export function insertPipelineAfter(id, pipeline) {
   const index = pipelines.findIndex((item) => item.id === id);
   const at = index < 0 ? pipelines.length : index + 1;
   pipelines = [...pipelines.slice(0, at), pipeline, ...pipelines.slice(at)];
+  persist();
   return pipeline;
 }
 
 export function updatePipeline(id, patch) {
   pipelines = pipelines.map((item) => (item.id === id ? { ...item, ...patch } : item));
+  persist();
   return getPipeline(id);
 }
 
 export function removePipeline(id) {
   pipelines = pipelines.filter((item) => item.id !== id);
+  persist();
 }
 
 export function nextCreatedPipelineName() {
   createdCount += 1;
+  persist();
   return `New Pipeline ${createdCount}`;
 }
 

@@ -1,7 +1,7 @@
 import { AppShell, bindAppShell } from "../layout/AppShell.js";
 import { icons } from "../layout/icons.js";
 import { escapeHtml, escapeHtmlAttr } from "../utils/escapeHtml.js";
-import { getQualityDashboard } from "../data/quality.js";
+import { getQualityDashboard, updateIssue } from "../data/quality.js";
 import { bone, createSkeletonLoader, skelTable, skelToolbar } from "../utils/skeleton.js";
 
 const LINE = "#15B3FA";
@@ -611,7 +611,7 @@ export function DataQualityPage({ currentRoute = "/data-quality" } = {}) {
         if (!issue) return;
         const current = issue.assignee || assignees[0];
         const next = assignees[(assignees.indexOf(current) + 1) % assignees.length];
-        issue.assignee = next;
+        updateIssue(issue.id, { assignee: next });
         refreshDrawer(root, { animate: false });
         showToast(root, `Assigned to ${next}.`);
         return;
@@ -620,7 +620,7 @@ export function DataQualityPage({ currentRoute = "/data-quality" } = {}) {
       if (event.target.closest("[data-dq-resolve]")) {
         const issue = selectedIssue();
         if (!issue) return;
-        issue.status = "Resolved";
+        updateIssue(issue.id, { status: "Resolved" });
         showToast(root, `${issue.issue} marked as resolved.`);
         closeIssue(root);
         refreshIssues(root);

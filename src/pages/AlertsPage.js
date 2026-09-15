@@ -9,10 +9,11 @@ import {
   ALERT_METRICS,
   ALERT_OBJECTS,
   ALERT_RECIPIENTS,
-  ALERT_ROWS,
   ALERT_SEVERITIES,
   ALERT_STATUSES,
   ALERT_TYPES,
+  createAlert,
+  listAlerts,
 } from "../data/alerts.js";
 import { createSkeletonLoader, skelStats, skelTable, skelToolbar } from "../utils/skeleton.js";
 
@@ -54,10 +55,11 @@ export function AlertsPage({ currentRoute = "/alerts" } = {}) {
   let createOpen = false;
   let openSelect = "";
   let abort;
+  let toastTimer = 0;
 
   function filteredRows() {
     const q = query.trim().toLowerCase();
-    return ALERT_ROWS.filter((row) => {
+    return listAlerts().filter((row) => {
       if (filters.severity !== "All" && row.severity !== filters.severity) return false;
       if (filters.status !== "All" && row.status !== filters.status) return false;
       if (filters.type !== "All" && row.type !== filters.type) return false;
@@ -380,8 +382,18 @@ export function AlertsPage({ currentRoute = "/alerts" } = {}) {
           <div data-al-table>${tableMarkup()}</div>
         </section>
         ${createModalMarkup()}
+        <div class="toast" data-al-toast role="status" aria-live="polite"></div>
       </div>
     `;
+  }
+
+  function showToast(root, message) {
+    const toast = root.querySelector("[data-al-toast]");
+    if (!toast) return;
+    toast.textContent = message;
+    toast.classList.add("is-on");
+    window.clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(() => toast.classList.remove("is-on"), 2200);
   }
 
   function refreshTable(root) {
@@ -491,7 +503,16 @@ export function AlertsPage({ currentRoute = "/alerts" } = {}) {
       }
 
       if (event.target.closest("[data-al-submit]")) {
+        const name = String(form.name || "").trim();
+        if (!name) {
+          showToast(root, "Enter an alert name.");
+          root.querySelector("[data-al-input=\"name\"]")?.focus();
+          return;
+        }
+        createAlert(form);
         closeCreate(root);
+        refreshTable(root);
+        showToast(root, "Alert created");
         return;
       }
 
@@ -583,6 +604,7 @@ export function AlertsPage({ currentRoute = "/alerts" } = {}) {
       loader.clear();
       abort?.abort();
       abort = null;
+      window.clearTimeout(toastTimer);
     },
   };
 }

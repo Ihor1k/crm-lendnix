@@ -1,5 +1,6 @@
 import { listCatalogEntries } from "./catalog.js";
 import { listTopics } from "./streaming.js";
+import { loadJSON, saveJSON, mergeById } from "../utils/persist.js";
 
 function avgMetric(entries, label) {
   const values = entries
@@ -147,6 +148,20 @@ function buildIssues() {
   ];
 }
 
+let issues = mergeById(buildIssues(), loadJSON("quality.issues", []));
+
+function persistIssues() {
+  saveJSON("quality.issues", issues);
+}
+
+export function updateIssue(id, patch) {
+  const index = issues.findIndex((item) => item.id === id);
+  if (index < 0) return null;
+  issues[index] = { ...issues[index], ...patch };
+  persistIssues();
+  return issues[index];
+}
+
 function buildSummary(metrics) {
   const numeric = metrics.map((m) => {
     const n = Number.parseFloat(String(m.value).replace("%", ""));
@@ -196,7 +211,7 @@ export function getQualityDashboard() {
     dimensions: ["Completeness", "Integrity", "Consistency", "Duplicate Records", "Precision", "Timeliness"],
     ranges: ["24h", "7d", "30d"],
     summary: buildSummary(metrics),
-    issues: buildIssues(),
+    issues,
     owners: ["All", "Data Team"],
     severities: ["All", "High", "Medium", "Low"],
     statuses: ["All", "Open", "Investigating", "Resolved"],
