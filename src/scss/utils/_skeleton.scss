@@ -1,0 +1,153 @@
+.bone {
+  display: block;
+  background: #2a2a32;
+  border-radius: 8px;
+  animation: bone-pulse 1.2s ease-in-out infinite;
+
+  &--sm {
+    width: 42%;
+    height: 10px;
+  }
+
+  &--md {
+    width: 58%;
+    height: 12px;
+  }
+
+  &--lg {
+    width: 70%;
+    height: 22px;
+  }
+
+  &--title {
+    width: 36%;
+    height: 14px;
+  }
+
+  &--chart {
+    height: 180px;
+    width: 100%;
+    border-radius: 12px;
+  }
+
+  &--icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    flex: none;
+  }
+
+  &--line {
+    flex: 1;
+    height: 12px;
+  }
+
+  &--block {
+    width: 100%;
+    height: 120px;
+    border-radius: 8px;
+  }
+
+  &--field {
+    width: 100%;
+    height: 40px;
+    border-radius: 8px;
+  }
+
+  &--pill {
+    width: 88px;
+    height: 28px;
+    border-radius: 8px;
+  }
+}
+
+.bone-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.page-skel {
+  display: grid;
+  gap: 16px;
+  pointer-events: none;
+
+  &__panel {
+    display: grid;
+    gap: 16px;
+    padding: 16px;
+    border-radius: 8px;
+    border: 1px solid var(--stroke-main, #222);
+    background: var(--background-main, #171717);
+  }
+
+  &__grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  &__cards {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  &__kpis {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  &__kpi {
+    display: grid;
+    gap: 10px;
+    padding: 14px;
+    border-radius: 8px;
+    border: 1px solid var(--stroke-main, #222);
+    background: var(--background-main, #171717);
+  }
+
+  &__tabs {
+    display: flex;
+    gap: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--stroke-main, #222);
+  }
+}
+
+@keyframes bone-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 1200px) {
+  .page-skel__cards,
+  .page-skel__kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .page-skel__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .page-skel__cards,
+  .page-skel__kpis {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bone {
+    animation: none;
+  }
+}

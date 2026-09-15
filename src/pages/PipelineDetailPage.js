@@ -8,6 +8,7 @@ import {
   pipelineRuns,
   updatePipeline,
 } from "../data/pipelines.js";
+import { bone, createSkeletonLoader } from "../utils/skeleton.js";
 
 const HEALTH_META = {
   Healthy: { className: "is-ok", icon: icons.statusCheck },
@@ -362,6 +363,29 @@ export function PipelineDetailPage({ currentRoute = "/pipelines", id = "" } = {}
     return overviewMarkup(item);
   }
 
+  function skeletonMarkup() {
+    return `
+      <div class="pl-detail is-skeleton page-skel" aria-busy="true" aria-hidden="true">
+        <section class="pl-metrics page-skel__kpis">
+          ${Array.from({ length: 6 }, () => `
+            <article class="page-skel__kpi">
+              ${bone("bone--sm")}
+              ${bone("bone--md")}
+            </article>
+          `).join("")}
+        </section>
+        <div class="ds-panel pl-detail__panel page-skel__panel">
+          <div class="page-skel__tabs">
+            ${bone("bone--pill")}
+            ${bone("bone--pill")}
+            ${bone("bone--pill")}
+          </div>
+          ${bone("bone--chart")}
+        </div>
+      </div>
+    `;
+  }
+
   function pageMarkup(item) {
     return `
       <div class="pl-detail">
@@ -374,7 +398,7 @@ export function PipelineDetailPage({ currentRoute = "/pipelines", id = "" } = {}
     `;
   }
 
-  function paint(root) {
+  function paint(root, { loading } = {}) {
     abort?.abort();
     const item = pipeline();
     if (!item) {
@@ -385,12 +409,16 @@ export function PipelineDetailPage({ currentRoute = "/pipelines", id = "" } = {}
       currentRoute,
       heading: headingMarkup(item),
       tools: actionMarkup(item),
-      children: pageMarkup(item),
+      children: loading ? skeletonMarkup() : pageMarkup(item),
     });
     bindAppShell(root);
-    bindPage(root);
-    requestAnimationFrame(() => syncTabs(root));
+    if (!loading) {
+      bindPage(root);
+      requestAnimationFrame(() => syncTabs(root));
+    }
   }
+
+  const loader = createSkeletonLoader(paint);
 
   function bindPage(root) {
     abort = new AbortController();
@@ -437,9 +465,10 @@ export function PipelineDetailPage({ currentRoute = "/pipelines", id = "" } = {}
 
   return {
     mount(root) {
-      paint(root);
+      loader.load(root);
     },
     unmount() {
+      loader.clear();
       abort?.abort();
     },
   };

@@ -508,58 +508,6 @@
   color: var(--app-muted);
 }
 
-.bone {
-  display: block;
-  background: #2a2a32;
-  border-radius: 8px;
-  animation: bone-pulse 1.2s ease-in-out infinite;
-
-  &--sm {
-    width: 42%;
-    height: 10px;
-  }
-
-  &--md {
-    width: 58%;
-    height: 12px;
-  }
-
-  &--lg {
-    width: 70%;
-    height: 22px;
-  }
-
-  &--title {
-    width: 36%;
-    height: 14px;
-  }
-
-  &--chart {
-    height: 180px;
-    width: 100%;
-    border-radius: 12px;
-  }
-
-  &--icon {
-    width: 32px;
-    height: 32px;
-    border-radius: 9px;
-    flex: none;
-  }
-
-  &--line {
-    flex: 1;
-    height: 12px;
-  }
-}
-
-.bone-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 12px;
-}
-
 .toast {
   position: fixed;
   right: 24px;
@@ -578,16 +526,6 @@
   &.is-on {
     opacity: 1;
     transform: none;
-  }
-}
-
-@keyframes bone-pulse {
-  0%,
-  100% {
-    opacity: 0.55;
-  }
-  50% {
-    opacity: 1;
   }
 }
 

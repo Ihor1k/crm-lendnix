@@ -1,7 +1,9 @@
 import { AppShell, bindAppShell } from "../layout/AppShell.js";
 import { icons } from "../layout/icons.js";
 import { escapeHtml, escapeHtmlAttr } from "../utils/escapeHtml.js";
+import { bone, createSkeletonLoader, skelTable, skelToolbar } from "../utils/skeleton.js";
 import streamingCircleUrl from "../images/streaming-circle.svg?url";
+import { listTopics } from "../data/streaming.js";
 
 const RANGE_OPTIONS = ["Today", "Last 7 days", "Last 30 days"];
 
@@ -21,16 +23,7 @@ const KPIS = [
   { label: "Open Alerts", value: "2", icon: "warning", tone: "warn" },
 ];
 
-const TOPICS = [
-  { id: "customer-events", name: "customer-events", type: "Events", partitions: 12, rate: "620K", retention: "7 days", consumers: 4, status: "Healthy", mode: "Real-time", owner: "Alex Morgan" },
-  { id: "crm-system", name: "CRM System", type: "CDC", partitions: 8, rate: "245K", retention: "30 days", consumers: 3, status: "Healthy", mode: "Real-time", owner: "Emma Wilson" },
-  { id: "payment-events", name: "payment-events", type: "Events", partitions: 16, rate: "410K", retention: "14 days", consumers: 5, status: "Healthy", mode: "Real-time", owner: "Daniel Lee" },
-  { id: "partner-api", name: "Partner API", type: "API", partitions: 4, rate: "85K", retention: "30 days", consumers: 3, status: "Warning", mode: "Real-time", owner: "Michael Ross" },
-  { id: "mobile-clickstream", name: "mobile-clickstream", type: "Events", partitions: 10, rate: "198K", retention: "7 days", consumers: 2, status: "Healthy", mode: "Real-time", owner: "Alex Morgan" },
-  { id: "fraud-signals", name: "fraud-signals", type: "Events", partitions: 6, rate: "42K", retention: "14 days", consumers: 4, status: "Warning", mode: "Real-time", owner: "Michael Ross" },
-  { id: "bonus-events", name: "bonus-events", type: "Events", partitions: 5, rate: "31K", retention: "7 days", consumers: 2, status: "Healthy", mode: "Batch", owner: "Emma Wilson" },
-  { id: "audit-logs", name: "audit-logs", type: "Logs", partitions: 3, rate: "12K", retention: "90 days", consumers: 1, status: "Healthy", mode: "Batch", owner: "Daniel Lee" },
-];
+const TOPICS = listTopics();
 
 const CHART_X = ["00:00", "04:00", "08:00", "12:00", "16:00", "20:00"];
 const CHART_Y = ["0", "500", "1K", "1.5K", "2K"];
@@ -201,21 +194,11 @@ export function StreamingPage({ currentRoute = "/streaming" } = {}) {
         <td>${topic.consumers}</td>
         <td>${healthBadge(topic.status)}</td>
         <td class="ds-table__menu">
-          <div class="ds-actions">
-            <button
-              class="ds-actions__btn"
-              type="button"
-              data-row-menu="${escapeHtmlAttr(topic.id)}"
-              aria-label="Actions for ${escapeHtmlAttr(topic.name)}"
-              aria-haspopup="menu"
-              aria-expanded="false"
-            >${icons.more}</button>
-            <div class="ds-menu ds-menu--row" hidden role="menu">
-              <button type="button" role="menuitem" data-row-action="open" data-id="${escapeHtmlAttr(topic.id)}">${icons.eye} View topic</button>
-              <button type="button" role="menuitem" data-row-action="pause" data-id="${escapeHtmlAttr(topic.id)}">${icons.menuPause} Pause consumers</button>
-              <button type="button" role="menuitem" data-row-action="delete" data-id="${escapeHtmlAttr(topic.id)}">${icons.menuDelete} Delete</button>
-            </div>
-          </div>
+          <button
+            class="ds-actions__btn"
+            type="button"
+            aria-label="More options for ${escapeHtmlAttr(topic.name)}"
+          >${icons.more}</button>
         </td>
       </tr>
     `;
@@ -231,6 +214,35 @@ export function StreamingPage({ currentRoute = "/streaming" } = {}) {
       `;
     }
     return rows.map(rowMarkup).join("");
+  }
+
+  function skeletonMarkup() {
+    return `
+      <div class="st-page is-skeleton page-skel" aria-busy="true" aria-hidden="true">
+        <section class="st-kpis page-skel__kpis">
+          ${Array.from({ length: KPIS.length }, () => `
+            <article class="page-skel__kpi">
+              ${bone("bone--sm")}
+              ${bone("bone--lg")}
+            </article>
+          `).join("")}
+        </section>
+        <section class="st-charts page-skel__grid">
+          <article class="st-chart page-skel__panel">
+            ${bone("bone--title")}
+            ${bone("bone--chart")}
+          </article>
+          <article class="st-chart page-skel__panel">
+            ${bone("bone--title")}
+            ${bone("bone--chart")}
+          </article>
+        </section>
+        <section class="ds-panel st-table-panel page-skel__panel">
+          ${skelToolbar(FILTERS.length)}
+          ${skelTable({ columns: 7, rows: 6 })}
+        </section>
+      </div>
+    `;
   }
 
   function pageMarkup() {
@@ -350,12 +362,12 @@ export function StreamingPage({ currentRoute = "/streaming" } = {}) {
     root.querySelectorAll(".ds-menu").forEach((menu) => {
       menu.hidden = true;
     });
-    root.querySelectorAll("[data-filter-toggle], [data-row-menu], [data-range-toggle]").forEach((btn) => {
+    root.querySelectorAll("[data-filter-toggle], [data-range-toggle]").forEach((btn) => {
       btn.setAttribute("aria-expanded", "false");
     });
   }
 
-  function paint(root) {
+  function paint(root, { loading } = {}) {
     abort?.abort();
     root.innerHTML = AppShell({
       currentRoute,
@@ -366,11 +378,13 @@ export function StreamingPage({ currentRoute = "/streaming" } = {}) {
         </div>
       `,
       tools: toolsMarkup(),
-      children: pageMarkup(),
+      children: loading ? skeletonMarkup() : pageMarkup(),
     });
     bindAppShell(root);
-    bindPage(root);
+    if (!loading) bindPage(root);
   }
+
+  const loader = createSkeletonLoader(paint);
 
   function refreshRows(root) {
     const body = root.querySelector("[data-topic-rows]");
@@ -429,40 +443,21 @@ export function StreamingPage({ currentRoute = "/streaming" } = {}) {
         return;
       }
 
-      const rowMenu = event.target.closest("[data-row-menu]");
-      if (rowMenu) {
+      const rowMenuBtn = event.target.closest(".ds-table__menu .ds-actions__btn");
+      if (rowMenuBtn) {
         event.preventDefault();
         event.stopPropagation();
-        const menu = rowMenu.parentElement?.querySelector(".ds-menu");
-        const open = menu && menu.hidden;
-        closeMenus(root);
-        if (menu && open) {
-          menu.hidden = false;
-          rowMenu.setAttribute("aria-expanded", "true");
-        }
-        return;
-      }
-
-      const rowAction = event.target.closest("[data-row-action]");
-      if (rowAction) {
-        event.preventDefault();
-        const id = rowAction.dataset.id || "";
-        const action = rowAction.dataset.rowAction;
-        closeMenus(root);
-        if (action === "open" && id) {
-          window.location.hash = `#/streaming/${id}`;
-        }
         return;
       }
 
       const openRow = event.target.closest("[data-topic-open]");
-      if (openRow && !event.target.closest(".ds-actions")) {
+      if (openRow && !event.target.closest(".ds-table__menu")) {
         const id = openRow.dataset.topicOpen;
         if (id) window.location.hash = `#/streaming/${id}`;
         return;
       }
 
-      if (!event.target.closest(".ds-filter, .ds-actions")) {
+      if (!event.target.closest(".ds-filter")) {
         closeMenus(root);
       }
     }, { signal });
@@ -477,9 +472,10 @@ export function StreamingPage({ currentRoute = "/streaming" } = {}) {
 
   return {
     mount(root) {
-      paint(root);
+      loader.load(root);
     },
     unmount() {
+      loader.clear();
       abort?.abort();
     },
   };

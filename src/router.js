@@ -7,6 +7,13 @@ import { DataSourcePage } from "./pages/DataSourcePage.js";
 import { PipelinesPage } from "./pages/PipelinesPage.js";
 import { PipelineDetailPage } from "./pages/PipelineDetailPage.js";
 import { StreamingPage } from "./pages/StreamingPage.js";
+import { StreamingTopicPage } from "./pages/StreamingTopicPage.js";
+import { DataCatalogPage } from "./pages/DataCatalogPage.js";
+import { DataQualityPage } from "./pages/DataQualityPage.js";
+import { CustomerPage } from "./pages/CustomerPage.js";
+import { ReportsPage } from "./pages/ReportsPage.js";
+import { AlertsPage } from "./pages/AlertsPage.js";
+import { SettingsPage } from "./pages/SettingsPage.js";
 
 function navigoRootFromViteBase() {
   const base = import.meta.env.BASE_URL ?? "/";
@@ -59,7 +66,7 @@ const screens = [
   {
     path: "/data-catalog",
     title: "Data Catalog",
-    subtitle: "Business objects, schema, lineage, and access",
+    subtitle: "Explore trusted datasets and business objects",
   },
   {
     path: "/data-quality",
@@ -161,13 +168,68 @@ export function createRouter(appRoot) {
     });
   });
 
+  router.on("/streaming/:topic", (match) => {
+    requireSession(() => {
+      const topicId = match?.data?.topic ?? "";
+      render(() =>
+        StreamingTopicPage({
+          currentRoute: `/streaming/${topicId}`,
+          topicId,
+        }),
+      );
+    });
+  });
+
+  router.on("/data-catalog", () => {
+    requireSession(() => {
+      render(() => DataCatalogPage({ currentRoute: "/data-catalog" }));
+    });
+  });
+
+  router.on("/data-quality", () => {
+    requireSession(() => {
+      render(() => DataQualityPage({ currentRoute: "/data-quality" }));
+    });
+  });
+
+  router.on("/customer-360", () => {
+    requireSession(() => {
+      render(() => CustomerPage({ currentRoute: "/customer-360" }));
+    });
+  });
+
+  router.on("/reports", () => {
+    requireSession(() => {
+      render(() => ReportsPage({ currentRoute: "/reports" }));
+    });
+  });
+
+  router.on("/alerts", () => {
+    requireSession(() => {
+      render(() => AlertsPage({ currentRoute: "/alerts" }));
+    });
+  });
+
+  router.on("/settings", () => {
+    requireSession(() => {
+      render(() => SettingsPage({ currentRoute: "/settings" }));
+    });
+  });
+
   for (const screen of screens.filter(
     (item) =>
       item.path !== "/dashboard"
       && item.path !== "/data-sources"
       && item.path !== "/pipelines"
       && item.path !== "/pipelines/:id"
-      && item.path !== "/streaming",
+      && item.path !== "/streaming"
+      && item.path !== "/streaming/:topic"
+      && item.path !== "/data-catalog"
+      && item.path !== "/data-quality"
+      && item.path !== "/customer-360"
+      && item.path !== "/reports"
+      && item.path !== "/alerts"
+      && item.path !== "/settings",
   )) {
     router.on(screen.path, (match) => {
       requireSession(() => {
