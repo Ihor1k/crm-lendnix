@@ -8,6 +8,8 @@ import {
   updateSource,
   upsertSource,
 } from "../data/sources.js";
+import { hydrateSharedStore, STORE_EVENT } from "../api/sharedStore.js";
+import { SKELETON_DELAY_MS } from "../utils/skeleton.js";
 
 const SOURCE_TYPES = ["PostgreSQL", "MySQL", "REST API", "Kafka", "S3", "CSV Upload"];
 const OWNERS = ["Alex Owner", "Jordan Diaz", "Sam Rivera"];
@@ -1242,6 +1244,10 @@ export function DataSourcePage({ currentRoute = "/data-sources" } = {}) {
       }
       closeMenus(root);
     }, { signal });
+
+    window.addEventListener(STORE_EVENT, () => {
+      syncPage(root);
+    }, { signal });
   }
 
   function paint(root, { loading } = {}) {
@@ -1266,9 +1272,18 @@ export function DataSourcePage({ currentRoute = "/data-sources" } = {}) {
   function load(root) {
     window.clearTimeout(loadTimer);
     paint(root, { loading: true });
-    loadTimer = window.setTimeout(() => {
-      paint(root, { loading: false });
-    }, 1000);
+    const started = Date.now();
+
+    void hydrateSharedStore({ force: true })
+      .catch((error) => {
+        console.warn("[lendnix] preload failed", error);
+      })
+      .finally(() => {
+        const wait = Math.max(0, SKELETON_DELAY_MS - (Date.now() - started));
+        loadTimer = window.setTimeout(() => {
+          paint(root, { loading: false });
+        }, wait);
+      });
   }
 
   return {

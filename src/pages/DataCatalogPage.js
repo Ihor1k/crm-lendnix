@@ -2,6 +2,7 @@ import { AppShell, bindAppShell } from "../layout/AppShell.js";
 import { icons } from "../layout/icons.js";
 import { escapeHtml, escapeHtmlAttr } from "../utils/escapeHtml.js";
 import { getCatalogEntry, listCatalogEntries } from "../data/catalog.js";
+import { hydrateSharedStore } from "../api/sharedStore.js";
 import { bone, createSkeletonLoader, skelToolbar } from "../utils/skeleton.js";
 
 const TABS = [
@@ -503,7 +504,9 @@ export function DataCatalogPage({ currentRoute = "/data-catalog" } = {}) {
     }
   }
 
-  const loader = createSkeletonLoader(paint);
+  const loader = createSkeletonLoader(paint, {
+    beforeShow: () => hydrateSharedStore({ force: true }),
+  });
 
   function bindPage(root) {
     abort?.abort();

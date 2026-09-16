@@ -6,6 +6,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:api": "node server/index.js",
+    "dev:all": "concurrently -k -n api,web -c magenta,cyan \"npm run dev:api\" \"npm run dev\"",
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint src vite.config.js",
@@ -33,6 +35,9 @@
     "vite-plugin-purgecss": "^0.2.12"
   },
   "dependencies": {
+    "concurrently": "^10.0.5",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
     "navigo": "^8.11.1"
   }
 }

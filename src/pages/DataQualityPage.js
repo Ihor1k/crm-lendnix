@@ -2,6 +2,7 @@ import { AppShell, bindAppShell } from "../layout/AppShell.js";
 import { icons } from "../layout/icons.js";
 import { escapeHtml, escapeHtmlAttr } from "../utils/escapeHtml.js";
 import { getQualityDashboard, updateIssue } from "../data/quality.js";
+import { hydrateSharedStore, STORE_EVENT } from "../api/sharedStore.js";
 import { bone, createSkeletonLoader, skelTable, skelToolbar } from "../utils/skeleton.js";
 
 const LINE = "#15B3FA";
@@ -522,7 +523,9 @@ export function DataQualityPage({ currentRoute = "/data-quality" } = {}) {
     }
   }
 
-  const loader = createSkeletonLoader(paint);
+  const loader = createSkeletonLoader(paint, {
+    beforeShow: () => hydrateSharedStore({ force: true }),
+  });
 
   function bindPage(root) {
     abort?.abort();
@@ -637,6 +640,10 @@ export function DataQualityPage({ currentRoute = "/data-quality" } = {}) {
       if (!event.target.closest(".ds-filter")) {
         closeMenus(root);
       }
+    }, { signal });
+
+    window.addEventListener(STORE_EVENT, () => {
+      refreshIssues(root);
     }, { signal });
   }
 

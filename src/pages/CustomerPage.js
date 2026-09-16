@@ -2,6 +2,7 @@ import { AppShell, bindAppShell } from "../layout/AppShell.js";
 import { icons } from "../layout/icons.js";
 import { escapeHtml, escapeHtmlAttr } from "../utils/escapeHtml.js";
 import { getCustomer, searchCustomers } from "../data/customer.js";
+import { hydrateSharedStore } from "../api/sharedStore.js";
 import { bone, createSkeletonLoader } from "../utils/skeleton.js";
 
 const TABS = [
@@ -301,7 +302,9 @@ export function CustomerPage({ currentRoute = "/customer-360" } = {}) {
     if (!loading) bindPage(root);
   }
 
-  const loader = createSkeletonLoader(paint);
+  const loader = createSkeletonLoader(paint, {
+    beforeShow: () => hydrateSharedStore({ force: true }),
+  });
 
   function bindPage(root) {
     abort?.abort();

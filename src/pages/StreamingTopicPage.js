@@ -8,6 +8,7 @@ import {
   topicConsumers,
   topicMessages,
 } from "../data/streaming.js";
+import { hydrateSharedStore } from "../api/sharedStore.js";
 import { bone, createSkeletonLoader, skelTable, skelToolbar } from "../utils/skeleton.js";
 
 const TABS = [
@@ -664,7 +665,9 @@ export function StreamingTopicPage({
     }
   }
 
-  const loader = createSkeletonLoader(paint);
+  const loader = createSkeletonLoader(paint, {
+    beforeShow: () => hydrateSharedStore({ force: true }),
+  });
 
   function bindPage(root) {
     abort = new AbortController();

@@ -1,7 +1,3 @@
-import { loadJSON, saveJSON } from "../utils/persist.js";
-
-const STORAGE_KEY = "sources";
-
 export const SOURCE_SEED = [
   {
     id: "payments",
@@ -55,13 +51,27 @@ export const SOURCE_SEED = [
   },
 ];
 
-const stored = loadJSON(STORAGE_KEY, null);
-let sources = Array.isArray(stored)
-  ? stored.map((item) => ({ ...item }))
-  : SOURCE_SEED.map((item) => ({ ...item }));
+let sources = SOURCE_SEED.map((item) => ({ ...item }));
 
 function persist() {
-  saveJSON(STORAGE_KEY, sources);
+  void pushSources();
+}
+
+async function pushSources() {
+  try {
+    const { pushSourcesState } = await import("../api/sharedStore.js");
+    await pushSourcesState(sources);
+  } catch {
+    // API optional during early boot / offline
+  }
+}
+
+export function replaceSourcesState(items) {
+  if (!Array.isArray(items)) return;
+  sources = items.map((item) => ({ ...item }));
+}
+
+export function getSourcesState() {
   return sources;
 }
 
@@ -75,7 +85,8 @@ export function getSource(id) {
 
 export function setSources(next) {
   sources = next.map((item) => ({ ...item }));
-  return persist();
+  persist();
+  return sources;
 }
 
 export function upsertSource(source) {
@@ -85,15 +96,18 @@ export function upsertSource(source) {
   } else {
     sources = [source, ...sources];
   }
-  return persist();
+  persist();
+  return sources;
 }
 
 export function updateSource(id, patch) {
   sources = sources.map((item) => (item.id === id ? { ...item, ...patch } : item));
-  return persist();
+  persist();
+  return sources;
 }
 
 export function removeSource(id) {
   sources = sources.filter((item) => item.id !== id);
-  return persist();
+  persist();
+  return sources;
 }

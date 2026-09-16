@@ -2,10 +2,27 @@
 
 Demo CRM / data-platform UI for **Lendnix** — a dark-themed single-page app that showcases overview metrics, data sources, pipelines, streaming, catalog, quality, Customer 360, reports, alerts, and settings.
 
-Built with **Vite**, vanilla **JavaScript**, **Sass**, and **Navigo** (hash routing). Demo changes (sources, pipelines, alerts, settings, etc.) are stored in the browser via `localStorage`.
+Built with **Vite**, vanilla **JavaScript**, **Sass**, **Navigo** (hash routing), and a small **Express** shared API so edits are visible to all users.
 
 **Live demo:** [https://ihor1k.github.io/crm-lendnix/](https://ihor1k.github.io/crm-lendnix/)  
 **Repository:** [https://github.com/Ihor1k/crm-lendnix](https://github.com/Ihor1k/crm-lendnix)
+
+---
+
+## What’s included
+
+| Area | Description | Shared for all users? |
+|------|-------------|------------------------|
+| Overview | KPIs, charts, platform health | Reads shared data |
+| Data Sources | Connect / edit / disable / delete | Yes (API) |
+| Pipelines | Create, pause/run, duplicate, delete | Yes (API) |
+| Streaming | Topics, throughput, topic views | Demo seed (read-only) |
+| Data Catalog | Datasets and business objects | Reads shared pipelines |
+| Data Quality | Scores, assign / resolve issues | Yes (API) |
+| Customer 360 | Unified customer profile | Demo seed |
+| Reports | Dashboard analytics | Demo seed |
+| Alerts | Monitor and create alerts | Yes (API) |
+| Settings | Workspace preferences | **No — local only** |
 
 ---
 
@@ -13,8 +30,6 @@ Built with **Vite**, vanilla **JavaScript**, **Sass**, and **Navigo** (hash rout
 
 - **Node.js** 18+ (recommended: current LTS)
 - **npm** 9+ (comes with Node)
-
-Check versions:
 
 ```bash
 node -v
@@ -27,14 +42,12 @@ npm -v
 
 ### 1. Get the project
 
-Clone the repository:
-
 ```bash
 git clone https://github.com/Ihor1k/crm-lendnix.git
 cd crm-lendnix
 ```
 
-Or download the ZIP from GitHub → **Code** → **Download ZIP**, then unzip and open the folder in a terminal.
+Or download the ZIP from GitHub → **Code** → **Download ZIP**, unzip, and open the folder in a terminal.
 
 ### 2. Install dependencies
 
@@ -42,21 +55,60 @@ Or download the ZIP from GitHub → **Code** → **Download ZIP**, then unzip an
 npm install
 ```
 
-### 3. Run locally
+### 3. Run the app + shared API together
 
 ```bash
-npm run dev
+npm run dev:all
 ```
 
-Vite will print a local URL (usually `http://localhost:5173`). Open it in your browser.
+This starts:
+
+- **API** on `http://localhost:8787`
+- **Web app** on `http://localhost:5173` (Vite proxies `/api` to the API)
+
+Open the Vite URL in your browser.
+
+To run them separately:
+
+```bash
+npm run dev:api   # terminal 1 — shared API
+npm run dev       # terminal 2 — frontend
+```
 
 ### 4. Sign in to the demo
 
-On the login screen, use **Enter Demo** (or fill any email/password and continue). You do not need a real account for this demo.
+On the login screen, use **Enter Demo** (or any email/password). No real account is required.
 
-### 5. Stop the app
+### 5. Stop
 
-In the terminal, press `Ctrl + C`.
+In the terminal(s), press `Ctrl + C`.
+
+---
+
+## Shared API (multi-user)
+
+Changes to **Data Sources, Pipelines, Alerts, and Data Quality** are saved on the API (`server/data/store.json`) and synced to other browsers (poll ~every 4 seconds + refresh on navigation).
+
+**Settings stay local** to each browser (`localStorage`) and are not shared.
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/health` | GET | Health check |
+| `/api/store` | GET | Full shared store |
+| `/api/sources` | PUT | Replace sources |
+| `/api/pipelines` | PUT | Replace pipelines |
+| `/api/alerts` | PUT | Replace alerts |
+| `/api/quality/issues` | PUT | Replace quality issues |
+
+Default API port: **8787** (`PORT` env overrides it).
+
+For a hosted frontend (e.g. GitHub Pages), set the API URL at build time:
+
+```bash
+# example
+set VITE_API_URL=https://your-api-host.example.com
+npm run build
+```
 
 ---
 
@@ -64,41 +116,39 @@ In the terminal, press `Ctrl + C`.
 
 | Command | What it does |
 |---------|----------------|
-| `npm run dev` | Start local development server with hot reload |
-| `npm run build` | Build production files into `dist/` |
-| `npm run preview` | Preview the production build locally |
-| `npm run deploy` | Build and publish to GitHub Pages (`gh-pages` branch) |
-| `npm run lint` | Run ESLint on the source |
+| `npm run dev:all` | API + Vite together (recommended) |
+| `npm run dev:api` | Shared API only |
+| `npm run dev` | Frontend only |
+| `npm run build` | Production build → `dist/` |
+| `npm run preview` | Preview production build |
+| `npm run deploy` | Build and publish to GitHub Pages |
+| `npm run lint` | ESLint |
 
 ---
 
 ## Deploy to GitHub Pages
 
-If you have push access to the repo:
-
 ```bash
 npm run deploy
 ```
 
-Then in GitHub: **Settings** → **Pages** → source branch **`gh-pages`** / root.
+GitHub → **Settings** → **Pages** → branch **`gh-pages`** / root.
 
-Site URL pattern: `https://<username>.github.io/crm-lendnix/`
+Note: GitHub Pages hosts only the static UI. For multi-user sync in production, host the Express API separately and set `VITE_API_URL` when building.
 
 ---
 
-## Notes for customers
+## Notes
 
-- This is a **front-end demo**. There is no backend API; data is mocked in the app.
-- Edits you make in the demo are saved in **your browser** (`localStorage`) and stay after refresh. Clearing site data resets them.
-- Demo login uses **sessionStorage** for the session flag (signing out / new browser session may ask you to enter the demo again).
+- Demo login uses **sessionStorage**.
+- If the API is offline, the UI falls back to built-in seed data (changes won’t sync until the API is back).
+- Clearing `server/data/store.json` resets shared demo data to the seed on next API start.
 
 ---
 
 ## Tech stack
 
-- Vite 5
-- JavaScript (ES modules)
-- Sass / CSS
-- Navigo (client-side hash routing)
+- Vite 5 + JavaScript (ES modules) + Sass
+- Navigo (hash routing)
+- Express + CORS (shared API)
 - `gh-pages` for static hosting
-

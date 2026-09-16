@@ -1,5 +1,3 @@
-import { loadJSON, saveJSON } from "../utils/persist.js";
-
 export const ALERT_SEVERITIES = ["All", "Critical", "High", "Medium", "Resolved"];
 export const ALERT_STATUSES = ["All", "Active", "Resolved"];
 export const ALERT_TYPES = ["All", "Lag", "Latency", "Quality", "Pipeline", "Freshness"];
@@ -163,13 +161,29 @@ export const ALERT_SEED = [
   },
 ];
 
-const storedAlerts = loadJSON("alerts", null);
-const alerts = Array.isArray(storedAlerts)
-  ? storedAlerts.map((item) => ({ ...item }))
-  : ALERT_SEED.map((item) => ({ ...item }));
+const alerts = ALERT_SEED.map((item) => ({ ...item }));
 
 function persistAlerts() {
-  saveJSON("alerts", alerts);
+  void pushAlerts();
+}
+
+async function pushAlerts() {
+  try {
+    const { pushAlertsState } = await import("../api/sharedStore.js");
+    await pushAlertsState(alerts);
+  } catch {
+    // API optional during early boot / offline
+  }
+}
+
+export function replaceAlertsState(items) {
+  if (!Array.isArray(items)) return;
+  alerts.length = 0;
+  items.forEach((item) => alerts.push({ ...item }));
+}
+
+export function getAlertsState() {
+  return alerts;
 }
 
 export function listAlerts() {

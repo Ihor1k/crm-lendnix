@@ -54,15 +54,28 @@ export function skelTable({ columns = 8, rows = 6 } = {}) {
   `;
 }
 
-export function createSkeletonLoader(paint, delay = SKELETON_DELAY_MS) {
+export function createSkeletonLoader(paint, {
+  delay = SKELETON_DELAY_MS,
+  beforeShow,
+} = {}) {
   let timer = 0;
   return {
     load(root, extras = {}) {
       window.clearTimeout(timer);
       paint(root, { loading: true, ...extras });
-      timer = window.setTimeout(() => {
-        paint(root, { loading: false, ...extras });
-      }, delay);
+      const started = Date.now();
+
+      Promise.resolve()
+        .then(() => beforeShow?.(root, extras))
+        .catch((error) => {
+          console.warn("[lendnix] preload failed", error);
+        })
+        .finally(() => {
+          const wait = Math.max(0, delay - (Date.now() - started));
+          timer = window.setTimeout(() => {
+            paint(root, { loading: false, ...extras });
+          }, wait);
+        });
     },
     clear() {
       window.clearTimeout(timer);

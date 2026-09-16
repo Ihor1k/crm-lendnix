@@ -1,16 +1,22 @@
 const PREFIX = "lendnix.";
 
+function cloneFallback(fallback) {
+  return typeof fallback === "function" ? fallback() : structuredClone(fallback);
+}
+
 export function loadJSON(key, fallback) {
+  if (typeof localStorage === "undefined") return cloneFallback(fallback);
   try {
     const raw = localStorage.getItem(PREFIX + key);
-    if (!raw) return typeof fallback === "function" ? fallback() : structuredClone(fallback);
+    if (!raw) return cloneFallback(fallback);
     return JSON.parse(raw);
   } catch {
-    return typeof fallback === "function" ? fallback() : structuredClone(fallback);
+    return cloneFallback(fallback);
   }
 }
 
 export function saveJSON(key, value) {
+  if (typeof localStorage === "undefined") return value;
   localStorage.setItem(PREFIX + key, JSON.stringify(value));
   return value;
 }

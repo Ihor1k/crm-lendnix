@@ -1,6 +1,7 @@
 import { AppShell, bindAppShell } from "../layout/AppShell.js";
 import { icons } from "../layout/icons.js";
 import { escapeHtml, escapeHtmlAttr } from "../utils/escapeHtml.js";
+import { hydrateSharedStore } from "../api/sharedStore.js";
 import { bone, createSkeletonLoader, skelTable, skelToolbar } from "../utils/skeleton.js";
 import streamingCircleUrl from "../images/streaming-circle.svg?url";
 import { listTopics } from "../data/streaming.js";
@@ -384,7 +385,9 @@ export function StreamingPage({ currentRoute = "/streaming" } = {}) {
     if (!loading) bindPage(root);
   }
 
-  const loader = createSkeletonLoader(paint);
+  const loader = createSkeletonLoader(paint, {
+    beforeShow: () => hydrateSharedStore({ force: true }),
+  });
 
   function refreshRows(root) {
     const body = root.querySelector("[data-topic-rows]");

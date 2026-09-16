@@ -15,6 +15,7 @@ import {
   createAlert,
   listAlerts,
 } from "../data/alerts.js";
+import { hydrateSharedStore, STORE_EVENT } from "../api/sharedStore.js";
 import { createSkeletonLoader, skelStats, skelTable, skelToolbar } from "../utils/skeleton.js";
 
 const CREATE_SEVERITIES = ALERT_SEVERITIES.filter((item) => item !== "All");
@@ -463,7 +464,9 @@ export function AlertsPage({ currentRoute = "/alerts" } = {}) {
     if (!loading) bindPage(root);
   }
 
-  const loader = createSkeletonLoader(paint);
+  const loader = createSkeletonLoader(paint, {
+    beforeShow: () => hydrateSharedStore({ force: true }),
+  });
 
   function bindPage(root) {
     abort?.abort();
@@ -593,6 +596,10 @@ export function AlertsPage({ currentRoute = "/alerts" } = {}) {
         openSelect = "";
         syncSelects(root);
       }
+    }, { signal });
+
+    window.addEventListener(STORE_EVENT, () => {
+      refreshTable(root);
     }, { signal });
   }
 

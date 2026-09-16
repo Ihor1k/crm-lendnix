@@ -1,5 +1,3 @@
-import { loadJSON, saveJSON } from "../utils/persist.js";
-
 export const PIPELINE_OWNERS = ["Alex Morgan", "Emma Wilson", "Daniel Lee", "Michael Ross", "Noah Taylor"];
 export const PIPELINE_SOURCES = [
   "Mobile Application",
@@ -13,7 +11,7 @@ export const PIPELINE_SOURCES = [
 export const PIPELINE_MODES = ["Real-time", "Scheduled"];
 export const PIPELINE_STATUSES = ["Running", "Paused"];
 
-const SEED = [
+export const PIPELINE_SEED = [
   {
     id: "customer-events",
     name: "Customer Events Ingestion",
@@ -196,14 +194,33 @@ const SEED = [
   },
 ];
 
-const stored = loadJSON("pipelines", null);
-let pipelines = Array.isArray(stored?.items)
-  ? stored.items.map((item) => ({ ...item }))
-  : SEED.map((item) => ({ ...item }));
-let createdCount = Number(stored?.createdCount) || 0;
+let pipelines = PIPELINE_SEED.map((item) => ({ ...item }));
+let createdCount = 0;
 
 function persist() {
-  saveJSON("pipelines", { items: pipelines, createdCount });
+  void pushPipelines();
+}
+
+async function pushPipelines() {
+  try {
+    const { pushPipelinesState } = await import("../api/sharedStore.js");
+    await pushPipelinesState({ items: pipelines, createdCount });
+  } catch {
+    // API optional during early boot / offline
+  }
+}
+
+export function replacePipelinesState({ items, createdCount: count } = {}) {
+  if (Array.isArray(items)) {
+    pipelines = items.map((item) => ({ ...item }));
+  }
+  if (typeof count === "number" && Number.isFinite(count)) {
+    createdCount = count;
+  }
+}
+
+export function getPipelinesState() {
+  return { items: pipelines, createdCount };
 }
 
 export function listPipelines() {

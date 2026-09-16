@@ -8,6 +8,7 @@ import {
   pipelineRuns,
   updatePipeline,
 } from "../data/pipelines.js";
+import { hydrateSharedStore } from "../api/sharedStore.js";
 import { bone, createSkeletonLoader } from "../utils/skeleton.js";
 
 const HEALTH_META = {
@@ -418,7 +419,9 @@ export function PipelineDetailPage({ currentRoute = "/pipelines", id = "" } = {}
     }
   }
 
-  const loader = createSkeletonLoader(paint);
+  const loader = createSkeletonLoader(paint, {
+    beforeShow: () => hydrateSharedStore({ force: true }),
+  });
 
   function bindPage(root) {
     abort = new AbortController();

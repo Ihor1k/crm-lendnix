@@ -1,6 +1,5 @@
 import { listCatalogEntries } from "./catalog.js";
 import { listTopics } from "./streaming.js";
-import { loadJSON, saveJSON, mergeById } from "../utils/persist.js";
 
 function avgMetric(entries, label) {
   const values = entries
@@ -148,10 +147,33 @@ function buildIssues() {
   ];
 }
 
-let issues = mergeById(buildIssues(), loadJSON("quality.issues", []));
+const issues = buildIssues().map((item) => ({ ...item }));
 
 function persistIssues() {
-  saveJSON("quality.issues", issues);
+  void pushIssues();
+}
+
+async function pushIssues() {
+  try {
+    const { pushQualityIssuesState } = await import("../api/sharedStore.js");
+    await pushQualityIssuesState(issues);
+  } catch {
+    // API optional during early boot / offline
+  }
+}
+
+export function replaceQualityIssuesState(items) {
+  if (!Array.isArray(items)) return;
+  issues.length = 0;
+  items.forEach((item) => issues.push({ ...item }));
+}
+
+export function getQualityIssuesState() {
+  return issues;
+}
+
+export function getQualityIssueSeed() {
+  return buildIssues().map((item) => ({ ...item }));
 }
 
 export function updateIssue(id, patch) {

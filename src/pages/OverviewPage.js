@@ -1,5 +1,7 @@
 import { AppShell, bindAppShell } from "../layout/AppShell.js";
 import { icons } from "../layout/icons.js";
+import { hydrateSharedStore } from "../api/sharedStore.js";
+import { SKELETON_DELAY_MS } from "../utils/skeleton.js";
 
 const KPIS = [
   { label: "Active Customers", value: "128,430", trend: "8,2%", icon: "customers" },
@@ -609,15 +611,24 @@ export function OverviewPage({ currentRoute = "/dashboard" } = {}) {
     window.clearTimeout(timer);
     window.clearTimeout(toastTimer);
     paint(root, { loading: true });
-    timer = window.setTimeout(() => {
-      paint(root, { loading: false, toast });
-      if (toast) {
-        toastTimer = window.setTimeout(() => {
-          const el = root.querySelector(".toast");
-          el?.classList.remove("is-on");
-        }, 2200);
-      }
-    }, 1000);
+    const started = Date.now();
+
+    void hydrateSharedStore({ force: true })
+      .catch((error) => {
+        console.warn("[lendnix] preload failed", error);
+      })
+      .finally(() => {
+        const wait = Math.max(0, SKELETON_DELAY_MS - (Date.now() - started));
+        timer = window.setTimeout(() => {
+          paint(root, { loading: false, toast });
+          if (toast) {
+            toastTimer = window.setTimeout(() => {
+              const el = root.querySelector(".toast");
+              el?.classList.remove("is-on");
+            }, 2200);
+          }
+        }, wait);
+      });
   }
 
   return {

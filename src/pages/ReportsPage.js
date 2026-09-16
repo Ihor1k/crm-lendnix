@@ -14,6 +14,7 @@ import {
   SAVED_REPORTS,
   SEGMENT_DISTRIBUTION,
 } from "../data/reports.js";
+import { hydrateSharedStore } from "../api/sharedStore.js";
 import { bone, createSkeletonLoader } from "../utils/skeleton.js";
 
 const REVENUE_AREA =
@@ -459,6 +460,8 @@ export function ReportsPage({ currentRoute = "/reports" } = {}) {
   const loader = createSkeletonLoader((root, extras = {}) => {
     paint(root, extras);
     if (!extras.loading) bind(root);
+  }, {
+    beforeShow: () => hydrateSharedStore({ force: true }),
   });
 
   function bind(root) {
