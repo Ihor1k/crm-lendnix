@@ -139,7 +139,12 @@ export function ReportsPage({ currentRoute = "/reports" } = {}) {
   function filtersMarkup() {
     return `
       <div class="rp-filters">
-        <button type="button" class="rp-select rp-select--view" data-rp-view>
+        <button
+          type="button"
+          class="rp-select rp-select--view is-readonly"
+          tabindex="-1"
+          aria-disabled="true"
+        >
           <span>${escapeHtml(view)}</span>
           ${icons.chevron}
         </button>
@@ -473,14 +478,6 @@ export function ReportsPage({ currentRoute = "/reports" } = {}) {
       const tabBtn = event.target.closest("[data-rp-tab]");
       if (tabBtn) {
         switchTab(root, tabBtn.getAttribute("data-rp-tab") || "dashboard");
-        return;
-      }
-
-      if (event.target.closest("[data-rp-view]")) {
-        const index = REPORT_VIEWS.indexOf(view);
-        view = REPORT_VIEWS[(index + 1) % REPORT_VIEWS.length];
-        paint(root);
-        bind(root);
       }
     }, { signal });
 

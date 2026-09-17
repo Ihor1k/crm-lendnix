@@ -14,8 +14,8 @@ import { bone, createSkeletonLoader, skelTable, skelToolbar } from "../utils/ske
 const TABS = [
   { id: "overview", label: "Overview" },
   { id: "messages", label: "Messages" },
-  { id: "consumers", label: "Consumers" },
-  { id: "configuration", label: "Configuration" },
+  { id: "consumers", label: "Consumers", readonly: true },
+  { id: "configuration", label: "Configuration", readonly: true },
 ];
 
 const EVENT_TABS = [
@@ -159,9 +159,10 @@ export function StreamingTopicPage({
           <button
             type="button"
             role="tab"
-            class="${tab === item.id ? "is-active" : ""}"
-            data-topic-tab="${item.id}"
+            class="${tab === item.id ? "is-active" : ""}${item.readonly ? " is-readonly" : ""}"
+            ${item.readonly ? "" : `data-topic-tab="${item.id}"`}
             aria-selected="${tab === item.id ? "true" : "false"}"
+            ${item.readonly ? 'tabindex="-1" aria-disabled="true"' : ""}
           >${item.label}</button>
         `).join("")}
       </div>
@@ -602,6 +603,8 @@ export function StreamingTopicPage({
   }
 
   function showTab(root, nextTab) {
+    const meta = TABS.find((item) => item.id === nextTab);
+    if (!nextTab || meta?.readonly) return;
     if (nextTab === tab) return;
     tab = nextTab;
     selectedMessageId = "";

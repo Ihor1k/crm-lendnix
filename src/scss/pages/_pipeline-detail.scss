@@ -191,6 +191,15 @@ line-height: 22px; /* 137.5% */
   &.is-active:hover {
     color: #b9a8ff;
   }
+
+  &.is-readonly {
+    cursor: default;
+    pointer-events: none;
+  }
+
+  &.is-readonly:hover {
+    color: var(--text-icon-secondary, #999);
+  }
 }
 
 .pl-detail__body {

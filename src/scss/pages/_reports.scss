@@ -129,6 +129,20 @@
   &--view {
     min-width: 180px;
     justify-content: space-between;
+    color: #658eff;
+
+    svg {
+      color: #658eff;
+    }
+  }
+
+  &.is-readonly {
+    cursor: default;
+    pointer-events: none;
+  }
+
+  &.is-readonly:hover {
+    border-color: #2a2a2a;
   }
 }
 
