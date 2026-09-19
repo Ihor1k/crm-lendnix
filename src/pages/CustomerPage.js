@@ -2,6 +2,7 @@ import { AppShell, bindAppShell } from "../layout/AppShell.js";
 import { icons } from "../layout/icons.js";
 import { escapeHtml, escapeHtmlAttr } from "../utils/escapeHtml.js";
 import { getCustomer, searchCustomers } from "../data/customer.js";
+import { createAlert } from "../data/alerts.js";
 import { hydrateSharedStore } from "../api/sharedStore.js";
 import { bone, createSkeletonLoader } from "../utils/skeleton.js";
 
@@ -16,6 +17,7 @@ const TABS = [
 export function CustomerPage({ currentRoute = "/customer-360" } = {}) {
   let selectedId = "184729";
   let query = "";
+  let tab = "overview";
   let abort;
   let toastTimer = 0;
 
@@ -107,9 +109,9 @@ export function CustomerPage({ currentRoute = "/customer-360" } = {}) {
           <button
             type="button"
             role="tab"
-            class="${item.id === "overview" ? "is-active" : ""}"
-            aria-selected="${item.id === "overview" ? "true" : "false"}"
-            tabindex="-1"
+            class="${item.id === tab ? "is-active" : ""}"
+            data-c360-tab="${item.id}"
+            aria-selected="${item.id === tab ? "true" : "false"}"
           >${escapeHtml(item.label)}</button>
         `).join("")}
       </div>
@@ -155,6 +157,7 @@ export function CustomerPage({ currentRoute = "/customer-360" } = {}) {
       <section class="c360-card c360-card--activity">
         <header class="c360-card__head c360-card__head--row">
           <h3>Recent Activity</h3>
+          <button class="c360-link" type="button" data-c360-view-all="activity">View all</button>
         </header>
         <ul class="c360-activity">
           ${customer.activity.map((item) => `
@@ -176,6 +179,7 @@ export function CustomerPage({ currentRoute = "/customer-360" } = {}) {
       <section class="c360-card">
         <header class="c360-card__head c360-card__head--row">
           <h3>Latest Transactions</h3>
+          <button class="c360-link" type="button" data-c360-view-all="transactions">View all</button>
         </header>
         <div class="c360-tx">
           <div class="c360-tx__head" aria-hidden="true">
@@ -210,6 +214,26 @@ export function CustomerPage({ currentRoute = "/customer-360" } = {}) {
     `;
   }
 
+  function riskCard(customer) {
+    const rows = customer.riskDetail || [];
+    return `
+      <section class="c360-card c360-card--profile">
+        <header class="c360-card__head c360-card__head--row">
+          <h3>Risk Assessment</h3>
+          <span class="c360-badge is-risk">${escapeHtml(customer.risk)}</span>
+        </header>
+        <ul class="c360-kv c360-kv--profile">
+          ${rows.map((row) => `
+            <li>
+              <span>${escapeHtml(row.label)}:</span>
+              <strong class="${row.tone === "ok" ? "is-ok" : ""}">${escapeHtml(row.value)}</strong>
+            </li>
+          `).join("")}
+        </ul>
+      </section>
+    `;
+  }
+
   function overviewMarkup(customer) {
     return `
       <div class="c360-grid">
@@ -224,6 +248,31 @@ export function CustomerPage({ currentRoute = "/customer-360" } = {}) {
         </div>
       </div>
     `;
+  }
+
+  function tabBodyMarkup(customer) {
+    if (tab === "activity") return activityCard(customer);
+    if (tab === "transactions") return transactionsCard(customer);
+    if (tab === "segments") return segmentsCard(customer);
+    if (tab === "risk") return riskCard(customer);
+    return overviewMarkup(customer);
+  }
+
+  function syncTabs(root) {
+    root.querySelectorAll("[data-c360-tab]").forEach((btn) => {
+      const active = btn.getAttribute("data-c360-tab") === tab;
+      btn.classList.toggle("is-active", active);
+      btn.setAttribute("aria-selected", active ? "true" : "false");
+    });
+  }
+
+  function showTab(root, nextTab) {
+    const customer = selectedCustomer();
+    if (!customer || !nextTab || nextTab === tab) return;
+    tab = nextTab;
+    syncTabs(root);
+    const body = root.querySelector("[data-c360-tab-body]");
+    if (body) body.innerHTML = tabBodyMarkup(customer);
   }
 
   function emptyMarkup() {
@@ -282,7 +331,7 @@ export function CustomerPage({ currentRoute = "/customer-360" } = {}) {
         ${customer ? `
           ${heroMarkup(customer)}
           ${tabsMarkup()}
-          <div data-c360-tab-body>${overviewMarkup(customer)}</div>
+          <div data-c360-tab-body>${tabBodyMarkup(customer)}</div>
         ` : emptyMarkup()}
         <div class="toast" data-c360-toast role="status" aria-live="polite"></div>
       </div>
@@ -328,6 +377,7 @@ export function CustomerPage({ currentRoute = "/customer-360" } = {}) {
       }
       selectedId = matches[0].id;
       query = "";
+      tab = "overview";
       paint(root);
     }, { signal });
 
@@ -335,18 +385,43 @@ export function CustomerPage({ currentRoute = "/customer-360" } = {}) {
       if (event.target.closest("[data-c360-clear]")) {
         selectedId = "";
         query = "";
+        tab = "overview";
         paint(root);
         return;
       }
 
-      if (event.target.closest(".c360-tabs button")) {
+      const tabBtn = event.target.closest("[data-c360-tab]");
+      if (tabBtn) {
         event.preventDefault();
+        showTab(root, tabBtn.getAttribute("data-c360-tab") || "overview");
+        return;
+      }
+
+      const viewAll = event.target.closest("[data-c360-view-all]");
+      if (viewAll) {
+        event.preventDefault();
+        showTab(root, viewAll.getAttribute("data-c360-view-all") || "overview");
         return;
       }
 
       if (event.target.closest("[data-c360-alert]")) {
         const customer = selectedCustomer();
-        showToast(root, customer ? `Alert draft created for ${customer.label}.` : "Select a customer first.");
+        if (!customer) {
+          showToast(root, "Select a customer first.");
+          return;
+        }
+        createAlert({
+          name: `Risk review — ${customer.label}`,
+          metric: "Fraud Risk",
+          condition: "Equals",
+          threshold: customer.risk,
+          severity: customer.risk === "Low" ? "Medium" : "High",
+          relatedObject: "Customer",
+          type: "Quality",
+          channel: "platform",
+          recipients: "Aaron Warner",
+        });
+        showToast(root, `Alert created for ${customer.label}.`);
         return;
       }
 

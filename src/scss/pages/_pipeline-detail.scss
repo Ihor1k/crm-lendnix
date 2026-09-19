@@ -584,16 +584,16 @@ line-height: 22px; /* 137.5% */
 
 .pl-config-list {
   display: grid;
-  gap: 20px;
+  gap: 16px;
   margin: 0;
-  max-width: 640px;
-  padding-right: 0;
+  max-width: 720px;
+  padding-right: 200px;
 }
 
 .pl-config-list__row {
   display: grid;
-  grid-template-columns: 180px minmax(0, 1fr);
-  column-gap: 12px;
+  grid-template-columns: 160px minmax(0, 1fr);
+  column-gap: 24px;
   align-items: start;
 
   dt {
@@ -609,9 +609,88 @@ line-height: 22px; /* 137.5% */
     margin: 0;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 4px;
     min-width: 0;
   }
+
+  .al-field__control {
+    max-width: 420px;
+  }
+}
+
+.pl-config-panel.is-editing .pl-config-list {
+  gap: 20px;
+}
+
+.pl-config-panel.is-editing .pl-config-list__row {
+  dt {
+    line-height: 40px;
+  }
+
+  dd {
+    gap: 8px;
+  }
+}
+
+.pl-config-select {
+  position: relative;
+  max-width: 420px;
+}
+
+.pl-config-select__menu.ds-menu {
+  z-index: 30;
+  min-width: 100%;
+
+  &[hidden] {
+    display: none;
+  }
+
+  .is-selected {
+    color: #fff;
+    background: rgba(123, 101, 255, 0.18);
+  }
+}
+
+.pl-config-field,
+.pl-config-duration {
+  max-width: 420px;
+}
+
+.pl-config-duration {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 40px;
+}
+
+.pl-config-duration__part {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+
+  .al-field__control {
+    width: 64px;
+    max-width: 64px;
+    min-height: 40px;
+    padding: 10px 8px;
+    text-align: center;
+  }
+
+  span {
+    color: var(--text-icon-secondary, #999);
+    font-family: Inter, var(--font-sans);
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 20px;
+    white-space: nowrap;
+  }
+}
+
+.pl-config-field.is-invalid .al-field__control,
+.pl-config-duration.is-invalid .al-field__control {
+  border-color: #f03030;
 }
 
 .pl-config-list__value {
@@ -750,10 +829,15 @@ line-height: 22px; /* 137.5% */
 
   .pl-config-list {
     max-width: none;
+    padding-right: 0;
   }
 
   .pl-config-list__row {
     grid-template-columns: 1fr;
     gap: 4px;
+  }
+
+  .pl-config-panel.is-editing .pl-config-list__row dt {
+    line-height: 20px;
   }
 }

@@ -14,8 +14,8 @@ import { bone, createSkeletonLoader, skelTable, skelToolbar } from "../utils/ske
 const TABS = [
   { id: "overview", label: "Overview" },
   { id: "messages", label: "Messages" },
-  { id: "consumers", label: "Consumers", readonly: true },
-  { id: "configuration", label: "Configuration", readonly: true },
+  { id: "consumers", label: "Consumers" },
+  { id: "configuration", label: "Configuration" },
 ];
 
 const EVENT_TABS = [
@@ -43,6 +43,10 @@ function healthBadge(status) {
       ${escapeHtml(status)}
     </span>
   `;
+}
+
+function showToast(message) {
+  window.dispatchEvent(new CustomEvent("lendnix:toast", { detail: { message } }));
 }
 
 function messageStatus(status) {
@@ -159,10 +163,9 @@ export function StreamingTopicPage({
           <button
             type="button"
             role="tab"
-            class="${tab === item.id ? "is-active" : ""}${item.readonly ? " is-readonly" : ""}"
-            ${item.readonly ? "" : `data-topic-tab="${item.id}"`}
+            class="${tab === item.id ? "is-active" : ""}"
+            data-topic-tab="${item.id}"
             aria-selected="${tab === item.id ? "true" : "false"}"
-            ${item.readonly ? 'tabindex="-1" aria-disabled="true"' : ""}
           >${item.label}</button>
         `).join("")}
       </div>
@@ -373,7 +376,7 @@ export function StreamingTopicPage({
                 View customer
                 ${icons.externalLink}
               </button>
-              <button class="pl-action" type="button" data-reply-message>Reply Message</button>
+              <button class="pl-action" type="button" data-reply-message>Replay Message</button>
             </footer>
           ` : ""}
         </aside>
@@ -603,8 +606,7 @@ export function StreamingTopicPage({
   }
 
   function showTab(root, nextTab) {
-    const meta = TABS.find((item) => item.id === nextTab);
-    if (!nextTab || meta?.readonly) return;
+    if (!nextTab || !TABS.some((item) => item.id === nextTab)) return;
     if (nextTab === tab) return;
     tab = nextTab;
     selectedMessageId = "";
@@ -705,6 +707,29 @@ export function StreamingTopicPage({
         return;
       }
 
+      const viewCustomer = event.target.closest("[data-view-customer]");
+      if (viewCustomer) {
+        event.preventDefault();
+        const item = topic();
+        const details = item ? selectedMessage(item) : null;
+        const customer = details?.payload?.customer_id || "";
+        closeEvent(root);
+        showToast(customer ? `Opening customer ${customer}.` : "Opening Customer 360.");
+        window.location.hash = "#/customer-360";
+        return;
+      }
+
+      const replay = event.target.closest("[data-reply-message]");
+      if (replay) {
+        event.preventDefault();
+        const item = topic();
+        const details = item ? selectedMessage(item) : null;
+        showToast(details
+          ? `Message replayed to ${item.name}.`
+          : "Select a message to replay.");
+        return;
+      }
+
       const copyJson = event.target.closest("[data-copy-json]");
       if (copyJson) {
         event.preventDefault();
@@ -713,6 +738,7 @@ export function StreamingTopicPage({
         if (text && navigator.clipboard?.writeText) {
           navigator.clipboard.writeText(text).catch(() => {});
         }
+        showToast("Payload JSON copied.");
         return;
       }
 
@@ -724,6 +750,7 @@ export function StreamingTopicPage({
           navigator.clipboard.writeText(value).catch(() => {});
         }
         closeMenus(root);
+        showToast(value ? `Key ${value} copied.` : "Key copied.");
         return;
       }
 

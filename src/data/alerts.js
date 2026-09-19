@@ -1,3 +1,5 @@
+import { loadJSON, saveJSON } from "../utils/persist.js";
+
 export const ALERT_SEVERITIES = ["All", "Critical", "High", "Medium", "Resolved"];
 export const ALERT_STATUSES = ["All", "Active", "Resolved"];
 export const ALERT_TYPES = ["All", "Lag", "Latency", "Quality", "Pipeline", "Freshness"];
@@ -12,12 +14,15 @@ export const ALERT_OBJECTS = [
   "Data Quality Report",
 ];
 
-export const ALERT_KPIS = [
-  { key: "critical", label: "Critical", value: "1", tone: "fail", icon: "fail" },
-  { key: "high", label: "High", value: "2", tone: "ok", icon: "play" },
-  { key: "medium", label: "Medium", value: "4", tone: "ok", icon: "check" },
-  { key: "resolved", label: "Resolved Today", value: "8", tone: "purple", icon: "pipelines" },
+export const ALERT_KPI_META = [
+  { key: "critical", label: "Critical", tone: "fail", icon: "fail", severity: "Critical" },
+  { key: "high", label: "High", tone: "ok", icon: "play", severity: "High" },
+  { key: "medium", label: "Medium", tone: "ok", icon: "check", severity: "Medium" },
+  { key: "resolved", label: "Resolved Today", tone: "purple", icon: "pipelines" },
 ];
+
+/** @deprecated Use ALERT_KPI_META / getAlertKpis() */
+export const ALERT_KPIS = ALERT_KPI_META;
 
 export const ALERT_METRICS = [
   "Consumer Lag",
@@ -161,9 +166,10 @@ export const ALERT_SEED = [
   },
 ];
 
-const alerts = ALERT_SEED.map((item) => ({ ...item }));
+const alerts = loadJSON("alerts", () => ALERT_SEED.map((item) => ({ ...item })));
 
 function persistAlerts() {
+  saveJSON("alerts", alerts);
   void pushAlerts();
 }
 
@@ -178,8 +184,16 @@ async function pushAlerts() {
 
 export function replaceAlertsState(items) {
   if (!Array.isArray(items)) return;
+  const remoteIds = new Set(items.map((item) => item?.id).filter(Boolean));
+  const pendingLocal = alerts.filter((item) => (
+    item?.id
+    && /^a-\d+$/.test(item.id)
+    && !remoteIds.has(item.id)
+  ));
   alerts.length = 0;
+  pendingLocal.forEach((item) => alerts.push({ ...item }));
   items.forEach((item) => alerts.push({ ...item }));
+  saveJSON("alerts", alerts);
 }
 
 export function getAlertsState() {
@@ -188,6 +202,41 @@ export function getAlertsState() {
 
 export function listAlerts() {
   return alerts;
+}
+
+function isTriggeredToday(triggered) {
+  if (!triggered) return false;
+  const today = new Date();
+  const label = today.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  // Matches formats like "Sep 18, 2026, 02:46 PM" or "May 14, 2025, 09:31 AM"
+  return String(triggered).startsWith(label);
+}
+
+export function getAlertKpis() {
+  const rows = listAlerts();
+  return ALERT_KPI_META.map((meta) => {
+    let count = 0;
+    if (meta.key === "resolved") {
+      const resolved = rows.filter((row) => (
+        row.status === "Resolved" || row.severity === "Resolved"
+      ));
+      const todayResolved = resolved.filter((row) => isTriggeredToday(row.triggered));
+      count = todayResolved.length > 0 ? todayResolved.length : resolved.length;
+    } else {
+      count = rows.filter((row) => (
+        row.severity === meta.severity
+        && row.status !== "Resolved"
+      )).length;
+    }
+    return {
+      ...meta,
+      value: String(count),
+    };
+  });
 }
 
 /** @deprecated Prefer listAlerts() */

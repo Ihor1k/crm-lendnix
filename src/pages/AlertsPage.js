@@ -5,7 +5,7 @@ import slackIconUrl from "../images/slack.svg?url";
 import {
   ALERT_CHANNELS,
   ALERT_CONDITIONS,
-  ALERT_KPIS,
+  ALERT_KPI_META,
   ALERT_METRICS,
   ALERT_OBJECTS,
   ALERT_RECIPIENTS,
@@ -13,7 +13,10 @@ import {
   ALERT_STATUSES,
   ALERT_TYPES,
   createAlert,
+  getAlertKpis,
   listAlerts,
+  removeAlert,
+  updateAlert,
 } from "../data/alerts.js";
 import { hydrateSharedStore, STORE_EVENT } from "../api/sharedStore.js";
 import { createSkeletonLoader, skelStats, skelTable, skelToolbar } from "../utils/skeleton.js";
@@ -34,7 +37,7 @@ function statusClass(status) {
 
 function defaultForm() {
   return {
-    name: "Source 123",
+    name: "",
     metric: "",
     condition: "",
     threshold: "",
@@ -55,6 +58,7 @@ export function AlertsPage({ currentRoute = "/alerts" } = {}) {
   let form = defaultForm();
   let createOpen = false;
   let openSelect = "";
+  let detailId = "";
   let abort;
   let toastTimer = 0;
 
@@ -220,7 +224,7 @@ export function AlertsPage({ currentRoute = "/alerts" } = {}) {
 
           <div class="al-modal__body">
             <section class="al-modal__section">
-              <label class="al-field">
+              <label class="al-field" data-al-field="name">
                 <span class="al-field__label">Alert Name <em>*</em></span>
                 <input
                   class="al-field__control"
@@ -229,39 +233,46 @@ export function AlertsPage({ currentRoute = "/alerts" } = {}) {
                   placeholder="Source 123"
                   value="${escapeHtmlAttr(form.name)}"
                 />
+                <span class="al-field__error" data-al-error="name">Alert name is required.</span>
               </label>
 
-              <label class="al-field">
+              <label class="al-field" data-al-field="metric">
                 <span class="al-field__label">Metric <em>*</em></span>
                 ${selectMarkup("metric", "Select Metric", ALERT_METRICS)}
+                <span class="al-field__error" data-al-error="metric">Select a metric.</span>
               </label>
 
               <div class="al-field__row">
-                <label class="al-field">
+                <label class="al-field" data-al-field="condition">
                   <span class="al-field__label">Condition <em>*</em></span>
                   ${selectMarkup("condition", "Select Condition", ALERT_CONDITIONS)}
+                  <span class="al-field__error" data-al-error="condition">Select a condition.</span>
                 </label>
-                <label class="al-field">
+                <label class="al-field" data-al-field="threshold">
                   <span class="al-field__label">Threshold <em>*</em></span>
                   <input class="al-field__control" type="text" data-al-input="threshold" placeholder="Threshold" value="${escapeHtmlAttr(form.threshold)}" />
+                  <span class="al-field__error" data-al-error="threshold">Enter a threshold.</span>
                 </label>
               </div>
 
-              <label class="al-field">
+              <label class="al-field" data-al-field="severity">
                 <span class="al-field__label">Severity <em>*</em></span>
                 ${selectMarkup("severity", "Select Severity", CREATE_SEVERITIES)}
+                <span class="al-field__error" data-al-error="severity">Select a severity.</span>
               </label>
             </section>
 
             <section class="al-modal__section">
-              <div class="al-field">
+              <div class="al-field" data-al-field="channel">
                 <span class="al-field__label">Notification Channel <em>*</em></span>
                 <div class="al-channels">${channelMarkup()}</div>
+                <span class="al-field__error" data-al-error="channel">Select a notification channel.</span>
               </div>
 
-              <label class="al-field">
+              <label class="al-field" data-al-field="recipients">
                 <span class="al-field__label">Recipients <em>*</em></span>
                 ${selectMarkup("recipients", "Recipients", ALERT_RECIPIENTS)}
+                <span class="al-field__error" data-al-error="recipients">Select recipients.</span>
               </label>
             </section>
           </div>
@@ -275,8 +286,143 @@ export function AlertsPage({ currentRoute = "/alerts" } = {}) {
     `;
   }
 
+  function detailAlert() {
+    return detailId ? listAlerts().find((row) => row.id === detailId) || null : null;
+  }
+
+  function detailRow(label, value) {
+    return `
+      <div class="al-field">
+        <span class="al-field__label">${escapeHtml(label)}</span>
+        <span class="al-field__control is-filled">${escapeHtml(value || "—")}</span>
+      </div>
+    `;
+  }
+
+  function detailModalMarkup() {
+    const row = detailAlert();
+    return `
+      <div class="al-modal${row ? " is-open" : ""}" data-al-detail ${row ? "" : "hidden"}>
+        <button class="al-modal__backdrop" type="button" data-al-detail-close aria-label="Close dialog"></button>
+        <div class="al-modal__panel" role="dialog" aria-modal="true" aria-labelledby="al-detail-title">
+          ${row ? `
+            <header class="al-modal__head">
+              <h2 id="al-detail-title">${escapeHtml(row.topic)}</h2>
+              <button class="al-modal__close" type="button" data-al-detail-close aria-label="Close">${icons.close}</button>
+            </header>
+            <div class="al-modal__body">
+              <section class="al-modal__section">
+                <div class="al-field__row">
+                  ${detailRow("Severity", row.severity)}
+                  ${detailRow("Status", row.status)}
+                </div>
+                ${detailRow("Related Object", row.relatedObject)}
+                ${detailRow("Alert Type", row.type)}
+              </section>
+              <section class="al-modal__section">
+                <div class="al-field__row">
+                  ${detailRow("Current Value", row.currentValue)}
+                  ${detailRow("Threshold", row.threshold)}
+                </div>
+                ${detailRow("Triggered", row.triggered)}
+                ${detailRow("Owner", row.owner)}
+              </section>
+            </div>
+            <footer class="al-modal__footer">
+              <button class="al-modal__cancel" type="button" data-al-detail-close>Close</button>
+              <div class="al-modal__resolve" data-al-resolve-wrap>
+                <button
+                  class="al-modal__submit"
+                  type="button"
+                  data-al-resolve-toggle
+                  data-id="${escapeHtmlAttr(row.id)}"
+                  aria-haspopup="menu"
+                  aria-expanded="false"
+                >
+                  ${escapeHtml(row.severity || "Resolve")}
+                  ${icons.chevron}
+                </button>
+                <div class="ds-menu al-modal__resolve-menu" hidden role="menu">
+                  ${CREATE_SEVERITIES.map((option) => `
+                    <button
+                      type="button"
+                      role="menuitem"
+                      data-al-resolve-option
+                      data-id="${escapeHtmlAttr(row.id)}"
+                      data-value="${escapeHtmlAttr(option)}"
+                      class="${row.severity === option ? "is-selected" : ""}"
+                    >${escapeHtml(option)}</button>
+                  `).join("")}
+                </div>
+              </div>
+            </footer>
+          ` : ""}
+        </div>
+      </div>
+    `;
+  }
+
+  function refreshDetail(root) {
+    const host = root.querySelector("[data-al-detail]");
+    if (!host) return;
+    const next = document.createElement("div");
+    next.innerHTML = detailModalMarkup();
+    host.replaceWith(next.firstElementChild);
+  }
+
+  function openDetail(root, id) {
+    detailId = "";
+    refreshDetail(root);
+    detailId = id;
+    refreshDetail(root);
+    const modal = root.querySelector("[data-al-detail]");
+    if (!modal) return;
+    modal.hidden = false;
+    modal.classList.remove("is-open");
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => modal.classList.add("is-open"));
+    });
+  }
+
+  function closeDetail(root) {
+    const modal = root.querySelector("[data-al-detail]");
+    if (!modal || modal.hidden) {
+      detailId = "";
+      return;
+    }
+    detailId = "";
+    modal.classList.remove("is-open");
+    window.setTimeout(() => {
+      if (!detailId) {
+        modal.hidden = true;
+        refreshDetail(root);
+      }
+    }, 340);
+  }
+
+  function closeRowMenus(root) {
+    root.querySelectorAll(".ds-menu--row, .al-modal__resolve-menu").forEach((menu) => {
+      menu.hidden = true;
+    });
+    root.querySelectorAll("[data-al-row-menu], [data-al-resolve-toggle]").forEach((btn) => {
+      btn.setAttribute("aria-expanded", "false");
+    });
+  }
+
+  function applyResolveChoice(root, id, value) {
+    const alert = listAlerts().find((item) => item.id === id);
+    if (!alert || !value) return;
+    const patch = value === "Resolved"
+      ? { severity: "Resolved", status: "Resolved" }
+      : { severity: value, status: "Active" };
+    updateAlert(id, patch);
+    refreshTable(root);
+    if (detailId === id) refreshDetail(root);
+    showToast(root, `${alert.topic} set to ${value}.`);
+  }
+
   function kpiMarkup() {
-    return ALERT_KPIS.map((kpi) => `
+    return getAlertKpis().map((kpi) => `
       <article class="ds-stat">
         <div class="ds-stat__top">
           <span class="ds-stat__icon ds-stat__icon--${kpi.tone}">${icons[kpi.icon] ?? ""}</span>
@@ -284,15 +430,26 @@ export function AlertsPage({ currentRoute = "/alerts" } = {}) {
             View details ${icons.arrowOut}
           </button>
         </div>
-        <strong class="ds-stat__value">${escapeHtml(kpi.value)}</strong>
+        <strong class="ds-stat__value" data-al-kpi-value="${kpi.key}">${escapeHtml(kpi.value)}</strong>
         <span class="ds-stat__label">${escapeHtml(kpi.label)}</span>
       </article>
     `).join("");
   }
 
+  function refreshKpis(root) {
+    const host = root.querySelector(".ds-stats");
+    if (host) host.innerHTML = kpiMarkup();
+  }
+
+  function refreshTable(root) {
+    const host = root.querySelector("[data-al-table]");
+    if (host) host.innerHTML = tableMarkup();
+    refreshKpis(root);
+  }
+
   function rowMarkup(row) {
     return `
-      <tr>
+      <tr class="al-row" data-al-row="${escapeHtmlAttr(row.id)}">
         <td>
           <strong class="al-topic">${escapeHtml(row.topic)}</strong>
         </td>
@@ -308,11 +465,21 @@ export function AlertsPage({ currentRoute = "/alerts" } = {}) {
         <td>${escapeHtml(row.triggered)}</td>
         <td>${escapeHtml(row.owner)}</td>
         <td>
-          <button
-            class="al-menu__btn"
-            type="button"
-            aria-label="Actions for ${escapeHtmlAttr(row.topic)}"
-          >${icons.more}</button>
+          <div class="ds-actions">
+            <button
+              class="al-menu__btn"
+              type="button"
+              data-al-row-menu="${escapeHtmlAttr(row.id)}"
+              aria-label="Actions for ${escapeHtmlAttr(row.topic)}"
+              aria-haspopup="menu"
+              aria-expanded="false"
+            >${icons.more}</button>
+            <div class="ds-menu ds-menu--row" hidden role="menu">
+              <button type="button" role="menuitem" data-al-row-action="view" data-id="${escapeHtmlAttr(row.id)}">${icons.eye} View</button>
+              <button type="button" role="menuitem" data-al-row-action="resolve" data-id="${escapeHtmlAttr(row.id)}">${icons.statusCheck} Resolve</button>
+              <button type="button" role="menuitem" data-al-row-action="delete" data-id="${escapeHtmlAttr(row.id)}">${icons.menuDelete} Delete</button>
+            </div>
+          </div>
         </td>
       </tr>
     `;
@@ -353,7 +520,7 @@ export function AlertsPage({ currentRoute = "/alerts" } = {}) {
   function skeletonMarkup() {
     return `
       <div class="al-page is-skeleton" aria-busy="true" aria-hidden="true">
-        ${skelStats(ALERT_KPIS.length)}
+        ${skelStats(ALERT_KPI_META.length)}
         <section class="ds-panel al-panel">
           ${skelToolbar(4)}
           ${skelTable({ columns: 9, rows: 6 })}
@@ -383,6 +550,7 @@ export function AlertsPage({ currentRoute = "/alerts" } = {}) {
           <div data-al-table>${tableMarkup()}</div>
         </section>
         ${createModalMarkup()}
+        ${detailModalMarkup()}
         <div class="toast" data-al-toast role="status" aria-live="polite"></div>
       </div>
     `;
@@ -395,11 +563,6 @@ export function AlertsPage({ currentRoute = "/alerts" } = {}) {
     toast.classList.add("is-on");
     window.clearTimeout(toastTimer);
     toastTimer = window.setTimeout(() => toast.classList.remove("is-on"), 2200);
-  }
-
-  function refreshTable(root) {
-    const host = root.querySelector("[data-al-table]");
-    if (host) host.innerHTML = tableMarkup();
   }
 
   function refreshModal(root) {
@@ -485,13 +648,21 @@ export function AlertsPage({ currentRoute = "/alerts" } = {}) {
       if (field) {
         const key = field.getAttribute("data-al-input");
         if (key && key in form) form[key] = field.value;
+        field.closest("[data-al-field]")?.classList.remove("is-invalid");
       }
     }, { signal });
 
     root.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" && createOpen) {
+      if (event.key !== "Escape") return;
+      if (createOpen) {
         closeCreate(root);
+        return;
       }
+      if (detailId) {
+        closeDetail(root);
+        return;
+      }
+      closeRowMenus(root);
     }, { signal });
 
     root.addEventListener("click", (event) => {
@@ -500,18 +671,118 @@ export function AlertsPage({ currentRoute = "/alerts" } = {}) {
         return;
       }
 
+      if (event.target.closest("[data-al-detail-close]")) {
+        closeDetail(root);
+        return;
+      }
+
+      const resolveOption = event.target.closest("[data-al-resolve-option]");
+      if (resolveOption) {
+        event.preventDefault();
+        const id = resolveOption.getAttribute("data-id") || "";
+        const value = resolveOption.getAttribute("data-value") || "";
+        closeRowMenus(root);
+        applyResolveChoice(root, id, value);
+        return;
+      }
+
+      const resolveToggle = event.target.closest("[data-al-resolve-toggle]");
+      if (resolveToggle) {
+        event.preventDefault();
+        const menu = resolveToggle.parentElement?.querySelector(".al-modal__resolve-menu");
+        const willOpen = Boolean(menu?.hidden);
+        closeRowMenus(root);
+        if (menu && willOpen) {
+          menu.hidden = false;
+          resolveToggle.setAttribute("aria-expanded", "true");
+        }
+        return;
+      }
+
+      const rowAction = event.target.closest("[data-al-row-action]");
+      if (rowAction) {
+        event.preventDefault();
+        const id = rowAction.getAttribute("data-id") || "";
+        const action = rowAction.getAttribute("data-al-row-action");
+        const alert = listAlerts().find((item) => item.id === id);
+        closeRowMenus(root);
+        if (!alert) return;
+        if (action === "view") {
+          openDetail(root, id);
+          return;
+        }
+        if (action === "resolve") {
+          applyResolveChoice(root, id, alert.status === "Resolved" ? "Medium" : "Resolved");
+          return;
+        }
+        if (action === "delete") {
+          removeAlert(id);
+          if (detailId === id) closeDetail(root);
+          refreshTable(root);
+          showToast(root, `${alert.topic} deleted.`);
+        }
+        return;
+      }
+
+      const rowMenu = event.target.closest("[data-al-row-menu]");
+      if (rowMenu) {
+        event.preventDefault();
+        const menu = rowMenu.parentElement?.querySelector(".ds-menu--row");
+        const willOpen = Boolean(menu?.hidden);
+        closeRowMenus(root);
+        if (menu && willOpen) {
+          menu.hidden = false;
+          rowMenu.setAttribute("aria-expanded", "true");
+        }
+        return;
+      }
+
+      const row = event.target.closest("[data-al-row]");
+      if (row && !event.target.closest(".ds-actions")) {
+        event.preventDefault();
+        root.querySelectorAll(".ds-filter .ds-menu").forEach((menu) => {
+          menu.hidden = true;
+        });
+        openDetail(root, row.getAttribute("data-al-row") || "");
+        return;
+      }
+
+      if (!event.target.closest(".ds-actions, .al-modal__resolve")) closeRowMenus(root);
+
       if (event.target.closest("[data-al-close]")) {
         closeCreate(root);
         return;
       }
 
       if (event.target.closest("[data-al-submit]")) {
-        const name = String(form.name || "").trim();
-        if (!name) {
-          showToast(root, "Enter an alert name.");
-          root.querySelector("[data-al-input=\"name\"]")?.focus();
+        const required = [
+          { key: "name", label: "Alert Name", selector: '[data-al-input="name"]' },
+          { key: "metric", label: "Metric", selector: '[data-al-select-toggle="metric"]' },
+          { key: "condition", label: "Condition", selector: '[data-al-select-toggle="condition"]' },
+          { key: "threshold", label: "Threshold", selector: '[data-al-input="threshold"]' },
+          { key: "severity", label: "Severity", selector: '[data-al-select-toggle="severity"]' },
+          { key: "recipients", label: "Recipients", selector: '[data-al-select-toggle="recipients"]' },
+        ];
+
+        root.querySelectorAll("[data-al-field]").forEach((field) => {
+          field.classList.remove("is-invalid");
+        });
+
+        const invalid = required.filter((field) => !String(form[field.key] || "").trim());
+        if (!form.channel) {
+          invalid.push({ key: "channel", label: "Notification Channel", selector: "[data-al-channel]" });
+        }
+
+        if (invalid.length) {
+          invalid.forEach((field) => {
+            root.querySelector(`[data-al-field="${field.key}"]`)?.classList.add("is-invalid");
+          });
+          const first = invalid[0];
+          showToast(root, `Please fill in ${first.label}.`);
+          root.querySelector(first.selector)?.focus();
           return;
         }
+
         createAlert(form);
         closeCreate(root);
         refreshTable(root);
@@ -522,6 +793,7 @@ export function AlertsPage({ currentRoute = "/alerts" } = {}) {
       const channelBtn = event.target.closest("[data-al-channel]");
       if (channelBtn) {
         form.channel = channelBtn.getAttribute("data-al-channel") || "platform";
+        root.querySelector('[data-al-field="channel"]')?.classList.remove("is-invalid");
         syncChannels(root);
         return;
       }
@@ -539,6 +811,7 @@ export function AlertsPage({ currentRoute = "/alerts" } = {}) {
         const key = selectOption.getAttribute("data-al-select-option");
         const value = selectOption.getAttribute("data-value") || "";
         if (key && key in form) form[key] = value;
+        if (key) root.querySelector(`[data-al-field="${key}"]`)?.classList.remove("is-invalid");
         openSelect = "";
         syncSelects(root);
         return;

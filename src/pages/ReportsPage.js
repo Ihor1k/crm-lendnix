@@ -1,6 +1,6 @@
 import { AppShell, bindAppShell } from "../layout/AppShell.js";
 import { icons } from "../layout/icons.js";
-import { escapeHtml } from "../utils/escapeHtml.js";
+import { escapeHtml, escapeHtmlAttr } from "../utils/escapeHtml.js";
 import worldMapUrl from "../images/world-map.webp?url";
 import {
   COHORT_HEADERS,
@@ -96,6 +96,44 @@ function donutChart() {
   `;
 }
 
+const FILTER_OPTIONS = {
+  dateRange: ["Last 7 days", "Last 30 days", "This quarter", "Year to date"],
+  country: ["All countries", "Germany", "United States", "United Kingdom", "Australia"],
+  product: ["All products", "Deposits", "Payments", "Loyalty"],
+  segment: ["All segments", "High-Value", "Active Mobile", "At Risk"],
+  device: ["All devices", "iOS", "Android", "Web"],
+  currency: ["All currencies", "EUR", "USD", "GBP"],
+};
+
+const OPEN_ACTIONS = [
+  { value: "dashboard", label: "Open in Dashboard" },
+  { value: "executive", label: "Open Executive Overview" },
+  { value: "preview", label: "Preview summary" },
+];
+
+const SCHEDULE_ACTIONS = [
+  { value: "daily", label: "Daily at 09:00" },
+  { value: "weekly", label: "Every Monday 08:00" },
+  { value: "monthly", label: "Monthly on the 1st" },
+  { value: "cancel", label: "Cancel schedule" },
+];
+
+function showToast(message) {
+  window.dispatchEvent(new CustomEvent("lendnix:toast", { detail: { message } }));
+}
+
+function scaleValue(value, factor) {
+  return String(value).replace(/\d[\d,.]*/, (match) => {
+    const numeric = Number(match.replace(/,/g, ""));
+    if (!Number.isFinite(numeric)) return match;
+    const decimals = match.includes(".") ? (match.split(".")[1] || "").length : 0;
+    return (numeric * factor).toLocaleString("en-US", {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    });
+  });
+}
+
 function cohortTone(value) {
   if (value == null) return "empty";
   if (value >= 100) return "max";
@@ -118,6 +156,19 @@ export function ReportsPage({ currentRoute = "/reports" } = {}) {
   let view = REPORT_VIEWS[0];
   let abort;
   let tabSwitchId = 0;
+  const filterValues = {};
+
+  function kpiFactor() {
+    let factor = 1;
+    REPORT_FILTERS.forEach((filter) => {
+      const value = filterValues[filter.id];
+      if (!value) return;
+      const options = FILTER_OPTIONS[filter.id] || [];
+      const index = Math.max(0, options.indexOf(value));
+      factor *= 1 + ((index % 4) - 1) * 0.017;
+    });
+    return factor;
+  }
 
   function tabsMarkup() {
     return `
@@ -136,43 +187,93 @@ export function ReportsPage({ currentRoute = "/reports" } = {}) {
     `;
   }
 
+  function selectMenuMarkup(options, {
+    selected = "",
+    optionAttr = "data-rp-filter-option",
+    filterKey = "",
+  } = {}) {
+    return `
+      <div class="ds-menu rp-select__menu" hidden role="listbox">
+        ${options.map((option) => `
+          <button
+            type="button"
+            role="option"
+            ${optionAttr}${filterKey ? `="${escapeHtmlAttr(filterKey)}"` : ""}
+            data-value="${escapeHtmlAttr(option)}"
+            aria-selected="${selected === option ? "true" : "false"}"
+            class="${selected === option ? "is-selected" : ""}"
+          >${escapeHtml(option)}</button>
+        `).join("")}
+      </div>
+    `;
+  }
+
   function filtersMarkup() {
     return `
       <div class="rp-filters">
-        <button
-          type="button"
-          class="rp-select rp-select--view is-readonly"
-          tabindex="-1"
-          aria-disabled="true"
-        >
-          <span>${escapeHtml(view)}</span>
-          ${icons.chevron}
-        </button>
+        <div class="rp-select-wrap" data-rp-select-wrap="view">
+          <button
+            type="button"
+            class="rp-select rp-select--view"
+            data-rp-view
+            aria-haspopup="listbox"
+            aria-expanded="false"
+          >
+            <span data-rp-view-label>${escapeHtml(view)}</span>
+            ${icons.chevron}
+          </button>
+          ${selectMenuMarkup(REPORT_VIEWS, {
+            selected: view,
+            optionAttr: "data-rp-view-option",
+          })}
+        </div>
         <div class="rp-filters__list">
-          ${REPORT_FILTERS.map((filter) => `
-            <button type="button" class="rp-select" data-rp-filter="${filter.id}">
-              ${filter.icon === "calendar" ? icons.calendar : ""}
-              <span>${escapeHtml(filter.label)}</span>
-              ${icons.chevron}
-            </button>
-          `).join("")}
+          ${REPORT_FILTERS.map((filter) => {
+            const value = filterValues[filter.id] || "";
+            return `
+              <div class="rp-select-wrap" data-rp-select-wrap="${escapeHtmlAttr(filter.id)}">
+                <button
+                  type="button"
+                  class="rp-select${value ? " is-filled" : ""}"
+                  data-rp-filter="${escapeHtmlAttr(filter.id)}"
+                  aria-haspopup="listbox"
+                  aria-expanded="false"
+                >
+                  ${filter.icon === "calendar" ? icons.calendar : ""}
+                  <span data-rp-filter-label="${escapeHtmlAttr(filter.id)}">${escapeHtml(value || filter.label)}</span>
+                  ${icons.chevron}
+                </button>
+                ${selectMenuMarkup(FILTER_OPTIONS[filter.id] || [], {
+                  selected: value,
+                  optionAttr: "data-rp-filter-option",
+                  filterKey: filter.id,
+                })}
+              </div>
+            `;
+          }).join("")}
         </div>
       </div>
     `;
   }
 
+  function kpiCardsMarkup() {
+    const factor = kpiFactor();
+    return REPORT_KPIS.map((kpi) => `
+      <article class="rp-kpi">
+        <p>${escapeHtml(kpi.label)}</p>
+        <strong>${escapeHtml(scaleValue(kpi.value, factor))}</strong>
+        <span class="rp-kpi__trend">↑ ${escapeHtml(kpi.trend)} <em>vs previous period</em></span>
+      </article>
+    `).join("");
+  }
+
   function kpisMarkup() {
-    return `
-      <section class="rp-kpis">
-        ${REPORT_KPIS.map((kpi) => `
-          <article class="rp-kpi">
-            <p>${escapeHtml(kpi.label)}</p>
-            <strong>${escapeHtml(kpi.value)}</strong>
-            <span class="rp-kpi__trend">↑ ${escapeHtml(kpi.trend)} <em>vs previous period</em></span>
-          </article>
-        `).join("")}
-      </section>
-    `;
+    return `<section class="rp-kpis">${kpiCardsMarkup()}</section>`;
+  }
+
+  function refreshKpis(root) {
+    const host = root.querySelector(".rp-kpis");
+    if (host) host.innerHTML = kpiCardsMarkup();
   }
 
   function funnelMarkup() {
@@ -306,6 +407,22 @@ export function ReportsPage({ currentRoute = "/reports" } = {}) {
     `;
   }
 
+  function reportActionMenuMarkup(reportName, kind, actions) {
+    return `
+      <div class="ds-menu rp-list__menu" hidden role="menu">
+        ${actions.map((action) => `
+          <button
+            type="button"
+            role="menuitem"
+            data-rp-report-choice="${escapeHtmlAttr(kind)}"
+            data-rp-report="${escapeHtmlAttr(reportName)}"
+            data-value="${escapeHtmlAttr(action.value)}"
+          >${escapeHtml(action.label)}</button>
+        `).join("")}
+      </div>
+    `;
+  }
+
   function reportsListMarkup() {
     return `
       <section class="rp-list">
@@ -326,9 +443,34 @@ export function ReportsPage({ currentRoute = "/reports" } = {}) {
               <span class="rp-list__desc">${escapeHtml(report.description)}</span>
               <span class="rp-list__updated">${escapeHtml(report.updated)}</span>
               <div class="rp-list__actions">
-                <button type="button" class="rp-list__btn">Open</button>
-                <button type="button" class="rp-list__btn">Download</button>
-                <button type="button" class="rp-list__btn">Schedule</button>
+                <div class="rp-list__action" data-rp-action-wrap>
+                  <button
+                    type="button"
+                    class="rp-list__btn"
+                    data-rp-report-menu="open"
+                    data-rp-report="${escapeHtmlAttr(report.name)}"
+                    aria-haspopup="menu"
+                    aria-expanded="false"
+                  >Open</button>
+                  ${reportActionMenuMarkup(report.name, "open", OPEN_ACTIONS)}
+                </div>
+                <button
+                  type="button"
+                  class="rp-list__btn"
+                  data-rp-report-action="download"
+                  data-rp-report="${escapeHtmlAttr(report.name)}"
+                >Download</button>
+                <div class="rp-list__action" data-rp-action-wrap>
+                  <button
+                    type="button"
+                    class="rp-list__btn"
+                    data-rp-report-menu="schedule"
+                    data-rp-report="${escapeHtmlAttr(report.name)}"
+                    aria-haspopup="menu"
+                    aria-expanded="false"
+                  >Schedule</button>
+                  ${reportActionMenuMarkup(report.name, "schedule", SCHEDULE_ACTIONS)}
+                </div>
               </div>
             </li>
           `).join("")}
@@ -474,10 +616,143 @@ export function ReportsPage({ currentRoute = "/reports" } = {}) {
     abort = new AbortController();
     const { signal } = abort;
 
+    const closeFilterMenus = () => {
+      root.querySelectorAll(".rp-select-wrap .ds-menu, .rp-list__action .ds-menu").forEach((menu) => {
+        menu.hidden = true;
+      });
+      root.querySelectorAll("[data-rp-view], [data-rp-filter], [data-rp-report-menu]").forEach((btn) => {
+        btn.setAttribute("aria-expanded", "false");
+      });
+    };
+
+    const openFilterMenu = (btn) => {
+      const wrap = btn.closest(".rp-select-wrap, .rp-list__action");
+      const menu = wrap?.querySelector(".ds-menu");
+      if (!menu) return;
+      const willOpen = menu.hidden;
+      closeFilterMenus();
+      if (willOpen) {
+        menu.hidden = false;
+        btn.setAttribute("aria-expanded", "true");
+      }
+    };
+
+    const syncMenuSelection = (menu, value) => {
+      menu?.querySelectorAll("[role='option']").forEach((option) => {
+        const selected = option.getAttribute("data-value") === value;
+        option.classList.toggle("is-selected", selected);
+        option.setAttribute("aria-selected", selected ? "true" : "false");
+      });
+    };
+
+    const applyOpenAction = (name, value) => {
+      if (value === "executive") {
+        view = "Executive Overview";
+        switchTab(root, "dashboard");
+        showToast(`${name} opened as Executive Overview.`);
+        return;
+      }
+      if (value === "preview") {
+        showToast(`${name}: ${SAVED_REPORTS.find((item) => item.name === name)?.description || "Summary ready."}`);
+        return;
+      }
+      switchTab(root, "dashboard");
+      showToast(`${name} opened in the dashboard.`);
+    };
+
+    const applyScheduleAction = (name, value) => {
+      const messages = {
+        daily: `${name} scheduled daily at 09:00.`,
+        weekly: `${name} scheduled every Monday at 08:00.`,
+        monthly: `${name} scheduled monthly on the 1st.`,
+        cancel: `${name} schedule cancelled.`,
+      };
+      showToast(messages[value] || `${name} schedule updated.`);
+    };
+
     root.addEventListener("click", (event) => {
       const tabBtn = event.target.closest("[data-rp-tab]");
       if (tabBtn) {
+        closeFilterMenus();
         switchTab(root, tabBtn.getAttribute("data-rp-tab") || "dashboard");
+        return;
+      }
+
+      const viewOption = event.target.closest("[data-rp-view-option]");
+      if (viewOption) {
+        event.preventDefault();
+        view = viewOption.getAttribute("data-value") || REPORT_VIEWS[0];
+        const label = root.querySelector("[data-rp-view-label]");
+        if (label) label.textContent = view;
+        syncMenuSelection(viewOption.closest(".ds-menu"), view);
+        closeFilterMenus();
+        refreshKpis(root);
+        showToast(`${view} view applied.`);
+        return;
+      }
+
+      const filterOption = event.target.closest("[data-rp-filter-option]");
+      if (filterOption) {
+        event.preventDefault();
+        const id = filterOption.getAttribute("data-rp-filter-option") || "";
+        const value = filterOption.getAttribute("data-value") || "";
+        if (!id) return;
+        filterValues[id] = value;
+        const label = root.querySelector(`[data-rp-filter-label="${id}"]`);
+        const btn = root.querySelector(`[data-rp-filter="${id}"]`);
+        if (label) label.textContent = value;
+        btn?.classList.add("is-filled");
+        syncMenuSelection(filterOption.closest(".ds-menu"), value);
+        closeFilterMenus();
+        refreshKpis(root);
+        showToast(`Filter applied: ${value}.`);
+        return;
+      }
+
+      const reportChoice = event.target.closest("[data-rp-report-choice]");
+      if (reportChoice) {
+        event.preventDefault();
+        const kind = reportChoice.getAttribute("data-rp-report-choice");
+        const name = reportChoice.getAttribute("data-rp-report") || "Report";
+        const value = reportChoice.getAttribute("data-value") || "";
+        closeFilterMenus();
+        if (kind === "open") applyOpenAction(name, value);
+        else if (kind === "schedule") applyScheduleAction(name, value);
+        return;
+      }
+
+      const viewBtn = event.target.closest("[data-rp-view]");
+      if (viewBtn) {
+        event.preventDefault();
+        openFilterMenu(viewBtn);
+        return;
+      }
+
+      const filterBtn = event.target.closest("[data-rp-filter]");
+      if (filterBtn) {
+        event.preventDefault();
+        openFilterMenu(filterBtn);
+        return;
+      }
+
+      const reportMenuBtn = event.target.closest("[data-rp-report-menu]");
+      if (reportMenuBtn) {
+        event.preventDefault();
+        openFilterMenu(reportMenuBtn);
+        return;
+      }
+
+      if (!event.target.closest(".rp-select-wrap, .rp-list__action")) closeFilterMenus();
+
+      const reportBtn = event.target.closest("[data-rp-report-action]");
+      if (reportBtn) {
+        event.preventDefault();
+        closeFilterMenus();
+        const name = reportBtn.getAttribute("data-rp-report") || "Report";
+        const action = reportBtn.getAttribute("data-rp-report-action");
+        if (action === "download") {
+          showToast(`${name} export started.`);
+        }
       }
     }, { signal });
 

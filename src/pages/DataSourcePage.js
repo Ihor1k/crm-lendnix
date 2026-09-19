@@ -145,7 +145,7 @@ function selectMarkup(key, label, options, value, required = true) {
   `;
 }
 
-function inputMarkup(key, label, { required = true, placeholder = label, type = "text" } = {}) {
+function inputMarkup(key, label, { required = true, placeholder = label, type = "text", extra = "" } = {}) {
   return `
     <div class="ds-connect__field">
       ${fieldLabel(label, required)}
@@ -156,6 +156,7 @@ function inputMarkup(key, label, { required = true, placeholder = label, type = 
         name="${escapeHtmlAttr(key)}"
         placeholder="${escapeHtmlAttr(placeholder)}"
         autocomplete="off"
+        ${extra}
       >
     </div>
   `;
@@ -210,9 +211,7 @@ export function DataSourcePage({ currentRoute = "/data-sources" } = {}) {
     return `
       <tr>
         <td>
-          <a class="ds-table__name" data-navigo href="#/data-sources/${escapeHtmlAttr(item.id)}">
-            ${escapeHtml(item.name)}
-          </a>
+          <strong class="ds-table__name">${escapeHtml(item.name)}</strong>
         </td>
         <td>${escapeHtml(item.type)}</td>
         <td>${statusBadge(item.status)}</td>
@@ -351,7 +350,9 @@ export function DataSourcePage({ currentRoute = "/data-sources" } = {}) {
               <h3>Connection Settings</h3>
               <div class="ds-connect__row">
                 ${inputMarkup("host", "Host")}
-                ${inputMarkup("port", "Port")}
+                ${inputMarkup("port", "Port", {
+                  extra: 'inputmode="numeric" pattern="\\d*" maxlength="5" min="1" max="65535"',
+                })}
               </div>
               ${inputMarkup("database", "Database Name")}
               <div class="ds-connect__row">
@@ -708,7 +709,7 @@ export function DataSourcePage({ currentRoute = "/data-sources" } = {}) {
     const form = { ...EMPTY_CONNECT_FORM, ...demoConnection(source) };
     form.name = source.name || "";
     form.type = source.type || "";
-    form.owner = !source.owner || source.owner === "-" ? "Alex Owner" : source.owner;
+    form.owner = !source.owner || source.owner === "-" ? "" : source.owner;
     form.description = source.description || "";
     const storedMode = source.processingMode || source.mode || "";
     if (PROCESSING_MODES.includes(storedMode)) {
@@ -900,6 +901,12 @@ export function DataSourcePage({ currentRoute = "/data-sources" } = {}) {
         showToast(root, "Fill in connection settings.");
         return;
       }
+      const port = Number(String(connectForm.port).trim());
+      if (!/^\d+$/.test(String(connectForm.port).trim()) || port < 1 || port > 65535) {
+        showToast(root, "Port must be a number between 1 and 65535.");
+        root.querySelector('[data-connect-input="port"]')?.focus();
+        return;
+      }
     }
     if (connectForm.type === "REST API") {
       const missing = ["baseUrl", "authType", "apiKey"].some(
@@ -1019,10 +1026,6 @@ export function DataSourcePage({ currentRoute = "/data-sources" } = {}) {
     toastTimer = window.setTimeout(() => toast.classList.remove("is-on"), 2200);
   }
 
-  function goToSource(id) {
-    window.location.hash = `#/data-sources/${id}`;
-  }
-
   function findSource(id) {
     return getSource(id);
   }
@@ -1034,7 +1037,14 @@ export function DataSourcePage({ currentRoute = "/data-sources" } = {}) {
     root.addEventListener("input", (event) => {
       const connectInput = event.target.closest("[data-connect-input]");
       if (connectInput) {
-        connectForm[connectInput.dataset.connectInput] = connectInput.value;
+        const key = connectInput.dataset.connectInput;
+        if (key === "port") {
+          const digits = connectInput.value.replace(/\D/g, "").slice(0, 5);
+          if (digits !== connectInput.value) connectInput.value = digits;
+          connectForm.port = digits;
+          return;
+        }
+        connectForm[key] = connectInput.value;
         return;
       }
       const search = event.target.closest("[data-source-search]");

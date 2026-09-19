@@ -105,6 +105,10 @@
   }
 }
 
+.al-row {
+  cursor: pointer;
+}
+
 .al-menu__btn {
   display: inline-flex;
   align-items: center;
@@ -533,6 +537,7 @@ button.al-field__control {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   height: 40px;
   padding: 0 16px;
   border: 0;
@@ -547,9 +552,56 @@ button.al-field__control {
   cursor: pointer;
   transition: background-color 400ms ease-in-out;
 
+  svg {
+    width: 10px;
+    height: 5px;
+    flex-shrink: 0;
+  }
+
+  &[aria-expanded="true"] svg {
+    transform: rotate(180deg);
+  }
+
   &:hover {
     background: #463b8b;
   }
+}
+
+.al-modal__resolve {
+  position: relative;
+}
+
+.al-modal__resolve-menu.ds-menu {
+  right: 0;
+  left: auto;
+  bottom: calc(100% + 8px);
+  top: auto;
+  z-index: 40;
+  min-width: 160px;
+
+  &[hidden] {
+    display: none;
+  }
+
+  .is-selected {
+    color: #fff;
+    background: rgba(123, 101, 255, 0.18);
+  }
+}
+
+.al-field.is-invalid .al-field__control {
+  border-color: #f03030;
+}
+
+.al-field__error {
+  display: none;
+  color: #f07070;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.al-field.is-invalid .al-field__error {
+  display: block;
 }
 
 @media (max-width: 720px) {

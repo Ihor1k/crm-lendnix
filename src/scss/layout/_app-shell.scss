@@ -146,6 +146,7 @@
   color: inherit;
   font-size: 14px;
   font-weight: 500;
+  pointer-events: none;
   transition: opacity 0.2s ease;
 
   .is-sidebar-open & {
@@ -246,6 +247,149 @@
   gap: 8px;
 }
 
+.app-shell__select {
+  position: relative;
+}
+
+.app-shell__select-menu.ds-menu {
+  z-index: 40;
+  min-width: 100%;
+
+  &[hidden] {
+    display: none;
+  }
+
+  &--end {
+    right: 0;
+    left: auto;
+  }
+
+  .is-selected {
+    color: #fff;
+    background: rgba(123, 101, 255, 0.18);
+  }
+}
+
+.app-shell__cal {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 50;
+  width: 280px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--stroke-main, #222);
+  background: #1b1b1b;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.app-shell__cal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+
+  strong {
+    color: #f5f5f5;
+    font-size: 13px;
+    font-weight: 600;
+  }
+}
+
+.app-shell__cal-nav {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #c6c6ce;
+  cursor: pointer;
+
+  svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  &:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.06);
+  }
+}
+
+.app-shell__cal-weekdays,
+.app-shell__cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.app-shell__cal-weekdays {
+  margin-bottom: 4px;
+
+  span {
+    height: 24px;
+    display: grid;
+    place-items: center;
+    color: #6f6f7a;
+    font-size: 11px;
+    font-weight: 500;
+  }
+}
+
+.app-shell__cal-day {
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #e4e4e7;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  &.is-outside {
+    color: #52525b;
+  }
+
+  &.is-in-range {
+    background: rgba(123, 101, 255, 0.16);
+    border-radius: 0;
+  }
+
+  &.is-start,
+  &.is-end,
+  &.is-single {
+    color: #fff;
+    background: var(--Brand-500, #7b65ff);
+    border-radius: 8px;
+  }
+
+  &.is-start:not(.is-single) {
+    border-radius: 8px 0 0 8px;
+  }
+
+  &.is-end:not(.is-single) {
+    border-radius: 0 8px 8px 0;
+  }
+}
+
+.app-shell__cal-hint {
+  margin: 10px 2px 0;
+  color: #6f6f7a;
+  font-size: 11px;
+  line-height: 14px;
+}
+
 .app-shell__icon-btn,
 .app-shell__chip {
   height: 36px;
@@ -257,6 +401,7 @@
   background: var(--app-elev);
   color: var(--app-text);
   border-radius: 10px;
+  cursor: pointer;
 }
 
 .app-shell__icon-btn {
@@ -307,11 +452,42 @@
   height: 36px;
   display: grid;
   place-items: center;
+  border: 0;
   border-radius: 50%;
   background: #7ea6ff;
   color: #10203a;
   font-size: 12px;
   font-weight: 700;
+  cursor: pointer;
+
+  &:hover {
+    filter: brightness(1.05);
+  }
+}
+
+.app-shell__profile {
+  position: relative;
+}
+
+.app-shell__profile-menu.ds-menu {
+  right: 0;
+  left: auto;
+  top: calc(100% + 8px);
+  min-width: 140px;
+  z-index: 40;
+
+  button {
+    width: 100%;
+    text-align: left;
+  }
+}
+
+/* Keep nav clickable during expand/collapse so the first click after
+   toggling still navigates instead of being swallowed by pointer-events. */
+.app-shell.is-sidebar-animating {
+  .app-shell__nav-link {
+    transition: none;
+  }
 }
 
 .app-shell__meta {

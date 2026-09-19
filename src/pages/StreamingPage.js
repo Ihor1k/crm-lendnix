@@ -16,13 +16,19 @@ const FILTERS = [
 ];
 
 const KPIS = [
-  { label: "Cluster Status", value: "Healthy", icon: "statusCheck", tone: "ok" },
-  { label: "Brokers Online", value: "3/3", icon: "streamBrokers", tone: "blue" },
-  { label: "Topics", value: "18", icon: "streamTopics", tone: "purple" },
-  { label: "Partitions", value: "84", icon: "streamPartitions", tone: "amber" },
-  { label: "Consumer Groups", value: "12", icon: "users", tone: "indigo" },
-  { label: "Open Alerts", value: "2", icon: "warning", tone: "warn" },
+  { key: "cluster", label: "Cluster Status", value: "Healthy", icon: "statusCheck", tone: "ok" },
+  { key: "brokers", label: "Brokers Online", value: "3/3", icon: "streamBrokers", tone: "blue" },
+  { key: "topics", label: "Topics", value: "18", icon: "streamTopics", tone: "purple" },
+  { key: "partitions", label: "Partitions", value: "84", icon: "streamPartitions", tone: "amber" },
+  { key: "consumers", label: "Consumer Groups", value: "12", icon: "users", tone: "indigo" },
+  { key: "alerts", label: "Open Alerts", value: "2", icon: "warning", tone: "warn", route: "#/alerts" },
 ];
+
+const CLUSTERS = ["Production Cluster", "Staging Cluster", "Analytics Cluster"];
+
+function showToast(message) {
+  window.dispatchEvent(new CustomEvent("lendnix:toast", { detail: { message } }));
+}
 
 const TOPICS = listTopics();
 
@@ -71,6 +77,7 @@ export function StreamingPage({ currentRoute = "/streaming" } = {}) {
   let query = "";
   let throughputRange = RANGE_OPTIONS[0];
   let lagRange = RANGE_OPTIONS[0];
+  let cluster = CLUSTERS[0];
   const filters = { type: "All", status: "All", mode: "All", owner: "All" };
   let abort;
 
@@ -195,11 +202,21 @@ export function StreamingPage({ currentRoute = "/streaming" } = {}) {
         <td>${topic.consumers}</td>
         <td>${healthBadge(topic.status)}</td>
         <td class="ds-table__menu">
-          <button
-            class="ds-actions__btn"
-            type="button"
-            aria-label="More options for ${escapeHtmlAttr(topic.name)}"
-          >${icons.more}</button>
+          <div class="ds-actions">
+            <button
+              class="ds-actions__btn"
+              type="button"
+              data-row-menu="${escapeHtmlAttr(topic.id)}"
+              aria-label="More options for ${escapeHtmlAttr(topic.name)}"
+              aria-haspopup="menu"
+              aria-expanded="false"
+            >${icons.more}</button>
+            <div class="ds-menu ds-menu--row" hidden role="menu">
+              <button type="button" role="menuitem" data-topic-action="view" data-id="${escapeHtmlAttr(topic.id)}">${icons.eye} View topic</button>
+              <button type="button" role="menuitem" data-topic-action="pause" data-id="${escapeHtmlAttr(topic.id)}">${icons.menuPause} Pause consumption</button>
+              <button type="button" role="menuitem" data-topic-action="copy" data-id="${escapeHtmlAttr(topic.id)}">${icons.menuDuplicate} Copy topic name</button>
+            </div>
+          </div>
         </td>
       </tr>
     `;
@@ -251,7 +268,7 @@ export function StreamingPage({ currentRoute = "/streaming" } = {}) {
       <div class="st-page">
         <section class="st-kpis">
           ${KPIS.map((kpi) => `
-            <article class="st-kpi">
+            <article class="st-kpi" data-st-kpi="${escapeHtmlAttr(kpi.key)}" data-st-route="${escapeHtmlAttr(kpi.route || "")}">
               <div class="st-kpi__top">
                 <p>${escapeHtml(kpi.label)}</p>
                 <span class="st-kpi__icon st-kpi__icon--${kpi.tone}">${icons[kpi.icon] ?? ""}</span>
@@ -348,12 +365,24 @@ export function StreamingPage({ currentRoute = "/streaming" } = {}) {
   function toolsMarkup() {
     return `
       <div class="st-cluster">
-        <div class="st-cluster__btn">
+        <button class="st-cluster__btn" type="button" data-cluster-toggle aria-haspopup="listbox" aria-expanded="false">
           <span class="st-cluster__label">
             <span class="st-cluster__icon">${icons.streamCluster}</span>
-            Production Cluster
+            ${escapeHtml(cluster)}
           </span>
           <span class="st-cluster__chevron">${icons.chevron}</span>
+        </button>
+        <div class="ds-menu" hidden role="listbox">
+          ${CLUSTERS.map((option) => `
+            <button
+              type="button"
+              role="option"
+              data-cluster-option
+              data-value="${escapeHtmlAttr(option)}"
+              aria-selected="${cluster === option ? "true" : "false"}"
+              class="${cluster === option ? "is-selected" : ""}"
+            >${escapeHtml(option)}</button>
+          `).join("")}
         </div>
       </div>
     `;
@@ -363,7 +392,7 @@ export function StreamingPage({ currentRoute = "/streaming" } = {}) {
     root.querySelectorAll(".ds-menu").forEach((menu) => {
       menu.hidden = true;
     });
-    root.querySelectorAll("[data-filter-toggle], [data-range-toggle]").forEach((btn) => {
+    root.querySelectorAll("[data-filter-toggle], [data-range-toggle], [data-row-menu], [data-cluster-toggle]").forEach((btn) => {
       btn.setAttribute("aria-expanded", "false");
     });
   }
@@ -446,10 +475,79 @@ export function StreamingPage({ currentRoute = "/streaming" } = {}) {
         return;
       }
 
-      const rowMenuBtn = event.target.closest(".ds-table__menu .ds-actions__btn");
+      const clusterToggle = event.target.closest("[data-cluster-toggle]");
+      if (clusterToggle) {
+        event.preventDefault();
+        const menu = clusterToggle.parentElement?.querySelector(".ds-menu");
+        const open = menu && menu.hidden;
+        closeMenus(root);
+        if (menu && open) {
+          menu.hidden = false;
+          clusterToggle.setAttribute("aria-expanded", "true");
+        }
+        return;
+      }
+
+      const clusterOption = event.target.closest("[data-cluster-option]");
+      if (clusterOption) {
+        event.preventDefault();
+        cluster = clusterOption.dataset.value || CLUSTERS[0];
+        closeMenus(root);
+        paint(root);
+        showToast(`Switched to ${cluster}.`);
+        return;
+      }
+
+      const topicAction = event.target.closest("[data-topic-action]");
+      if (topicAction) {
+        event.preventDefault();
+        event.stopPropagation();
+        const id = topicAction.dataset.id || "";
+        const action = topicAction.dataset.topicAction;
+        const topic = TOPICS.find((item) => item.id === id);
+        closeMenus(root);
+        if (!topic) return;
+        if (action === "view") {
+          window.location.hash = `#/streaming/${topic.id}`;
+          return;
+        }
+        if (action === "pause") {
+          showToast(`Consumption paused for ${topic.name}.`);
+          return;
+        }
+        if (action === "copy") {
+          if (navigator.clipboard?.writeText) {
+            navigator.clipboard.writeText(topic.name).catch(() => {});
+          }
+          showToast(`${topic.name} copied.`);
+        }
+        return;
+      }
+
+      const rowMenuBtn = event.target.closest("[data-row-menu]");
       if (rowMenuBtn) {
         event.preventDefault();
         event.stopPropagation();
+        const menu = rowMenuBtn.parentElement?.querySelector(".ds-menu");
+        const open = menu && menu.hidden;
+        closeMenus(root);
+        if (menu && open) {
+          menu.hidden = false;
+          rowMenuBtn.setAttribute("aria-expanded", "true");
+        }
+        return;
+      }
+
+      const kpiCard = event.target.closest("[data-st-kpi]");
+      if (kpiCard) {
+        const route = kpiCard.dataset.stRoute || "";
+        const label = kpiCard.querySelector("p")?.textContent?.trim() || "Metric";
+        closeMenus(root);
+        if (route) {
+          window.location.hash = route;
+          return;
+        }
+        showToast(`${label}: ${cluster} is reporting nominal values.`);
         return;
       }
 
@@ -460,7 +558,7 @@ export function StreamingPage({ currentRoute = "/streaming" } = {}) {
         return;
       }
 
-      if (!event.target.closest(".ds-filter")) {
+      if (!event.target.closest(".ds-filter, .ds-actions, .st-cluster")) {
         closeMenus(root);
       }
     }, { signal });

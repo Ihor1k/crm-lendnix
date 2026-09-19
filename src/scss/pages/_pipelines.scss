@@ -3,6 +3,15 @@
   min-width: 168px;
 }
 
+[data-pl-schedule] {
+  display: grid;
+  gap: 12px;
+
+  &[hidden] {
+    display: none;
+  }
+}
+
 .pl-table {
   min-width: 1180px;
 

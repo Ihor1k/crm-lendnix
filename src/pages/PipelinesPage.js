@@ -7,10 +7,10 @@ import {
   PIPELINE_SOURCES as SOURCES,
   PIPELINE_STATUSES as STATUSES,
   addPipeline,
+  addPipelineRun,
   getPipeline,
   insertPipelineAfter,
   listPipelines,
-  nextCreatedPipelineName,
   removePipeline,
   updatePipeline,
 } from "../data/pipelines.js";
@@ -18,6 +18,34 @@ import { hydrateSharedStore, STORE_EVENT } from "../api/sharedStore.js";
 import { SKELETON_DELAY_MS } from "../utils/skeleton.js";
 
 const PAGE_SIZE = 7;
+
+const DESTINATIONS = [
+  "customer-events",
+  "Transaction",
+  "Customer 360 Data Mart",
+  "Customer Data Mart",
+  "Fraud Detection Service",
+  "Partner Transactions",
+  "Bonus Data Mart",
+];
+
+const FREQUENCIES = ["Every 15 minutes", "Every 30 minutes", "Hourly", "Daily"];
+const TIMES = ["00:00", "06:00", "09:00", "12:00", "18:00", "21:00"];
+const TIMEZONES = ["UTC", "Europe/Kyiv", "Europe/London", "America/New_York"];
+
+const CREATE_FIELDS = [
+  { key: "name", label: "Pipeline Name" },
+  { key: "source", label: "Source" },
+  { key: "destination", label: "Destination" },
+  { key: "mode", label: "Processing Mode" },
+  { key: "owner", label: "Owner" },
+];
+
+const SCHEDULE_FIELDS = [
+  { key: "frequency", label: "Frequency" },
+  { key: "time", label: "Time" },
+  { key: "timezone", label: "Timezone" },
+];
 
 const FILTERS = [
   { key: "source", label: "Source", options: SOURCES },
@@ -82,6 +110,22 @@ export function PipelinesPage({ currentRoute = "/pipelines" } = {}) {
   let loadTimer = 0;
   let toastTimer = 0;
   let abort;
+  let createOpen = false;
+  let createForm = emptyCreateForm();
+  let openCreateSelect = "";
+
+  function emptyCreateForm() {
+    return {
+      name: "",
+      source: "",
+      destination: "",
+      mode: "",
+      frequency: "",
+      time: "",
+      timezone: "",
+      owner: "",
+    };
+  }
 
   function pipelines() {
     return listPipelines();
@@ -253,6 +297,202 @@ export function PipelinesPage({ currentRoute = "/pipelines" } = {}) {
     `;
   }
 
+  function createSelectMarkup(key, placeholder, options) {
+    const value = createForm[key];
+    const open = openCreateSelect === key;
+    return `
+      <div class="al-select${open ? " is-open" : ""}">
+        <button
+          class="al-field__control${value ? " is-filled" : ""}"
+          type="button"
+          data-pl-select-toggle="${key}"
+          aria-haspopup="listbox"
+          aria-expanded="${open ? "true" : "false"}"
+        >
+          <span>${value ? escapeHtml(value) : escapeHtml(placeholder)}</span>
+          ${icons.chevron}
+        </button>
+        <div class="ds-menu ds-menu--connect al-select__menu" role="listbox">
+          ${options.map((option) => `
+            <button
+              type="button"
+              role="option"
+              data-pl-select-option="${key}"
+              data-value="${escapeHtmlAttr(option)}"
+              aria-selected="${value === option ? "true" : "false"}"
+              class="${value === option ? "is-selected" : ""}"
+            >${escapeHtml(option)}</button>
+          `).join("")}
+        </div>
+      </div>
+    `;
+  }
+
+  function createModalMarkup() {
+    return `
+      <div class="al-modal${createOpen ? " is-open" : ""}" data-pl-modal ${createOpen ? "" : "hidden"}>
+        <button class="al-modal__backdrop" type="button" data-pl-close aria-label="Close dialog"></button>
+        <div class="al-modal__panel" role="dialog" aria-modal="true" aria-labelledby="pl-create-title">
+          <header class="al-modal__head">
+            <h2 id="pl-create-title">Create Pipeline</h2>
+            <button class="al-modal__close" type="button" data-pl-close aria-label="Close">${icons.close}</button>
+          </header>
+
+          <div class="al-modal__body">
+            <section class="al-modal__section">
+              <label class="al-field">
+                <span class="al-field__label">Pipeline Name <em>*</em></span>
+                <input
+                  class="al-field__control"
+                  type="text"
+                  data-pl-input="name"
+                  placeholder="Customer Events Ingestion"
+                  value="${escapeHtmlAttr(createForm.name)}"
+                />
+              </label>
+
+              <div class="al-field__row">
+                <label class="al-field">
+                  <span class="al-field__label">Source <em>*</em></span>
+                  ${createSelectMarkup("source", "Select Source", SOURCES)}
+                </label>
+                <label class="al-field">
+                  <span class="al-field__label">Destination <em>*</em></span>
+                  ${createSelectMarkup("destination", "Select Destination", DESTINATIONS)}
+                </label>
+              </div>
+            </section>
+
+            <section class="al-modal__section">
+              <label class="al-field">
+                <span class="al-field__label">Processing Mode <em>*</em></span>
+                ${createSelectMarkup("mode", "Select Processing Mode", MODES)}
+              </label>
+              <div data-pl-schedule ${createForm.mode === "Scheduled" ? "" : "hidden"}>
+                <label class="al-field">
+                  <span class="al-field__label">Frequency <em>*</em></span>
+                  ${createSelectMarkup("frequency", "Select Frequency", FREQUENCIES)}
+                </label>
+                <div class="al-field__row">
+                  <label class="al-field">
+                    <span class="al-field__label">Time <em>*</em></span>
+                    ${createSelectMarkup("time", "Select Time", TIMES)}
+                  </label>
+                  <label class="al-field">
+                    <span class="al-field__label">Timezone <em>*</em></span>
+                    ${createSelectMarkup("timezone", "Select Timezone", TIMEZONES)}
+                  </label>
+                </div>
+              </div>
+              <label class="al-field">
+                <span class="al-field__label">Owner <em>*</em></span>
+                ${createSelectMarkup("owner", "Select Owner", OWNERS)}
+              </label>
+            </section>
+          </div>
+
+          <footer class="al-modal__footer">
+            <button class="al-modal__cancel" type="button" data-pl-close>Cancel</button>
+            <button class="al-modal__submit" type="button" data-pl-submit>Create Pipeline</button>
+          </footer>
+        </div>
+      </div>
+    `;
+  }
+
+  function syncCreateSelects(root) {
+    const placeholders = {
+      source: "Select Source",
+      destination: "Select Destination",
+      mode: "Select Processing Mode",
+      frequency: "Select Frequency",
+      time: "Select Time",
+      timezone: "Select Timezone",
+      owner: "Select Owner",
+    };
+    root.querySelectorAll("[data-pl-modal] .al-select").forEach((wrap) => {
+      const toggle = wrap.querySelector("[data-pl-select-toggle]");
+      const menu = wrap.querySelector(".al-select__menu");
+      if (!toggle || !menu) return;
+      const key = toggle.getAttribute("data-pl-select-toggle") || "";
+      const value = createForm[key] || "";
+      const open = openCreateSelect === key;
+      const label = toggle.querySelector("span");
+
+      wrap.classList.toggle("is-open", open);
+      toggle.classList.toggle("is-filled", Boolean(value));
+      toggle.setAttribute("aria-expanded", open ? "true" : "false");
+      if (label) label.textContent = value || placeholders[key] || "Select";
+
+      menu.querySelectorAll("[data-pl-select-option]").forEach((option) => {
+        const selected = option.getAttribute("data-value") === value;
+        option.classList.toggle("is-selected", selected);
+        option.setAttribute("aria-selected", selected ? "true" : "false");
+      });
+    });
+  }
+
+  function syncCreateSchedule(root) {
+    const scheduled = createForm.mode === "Scheduled";
+    root.querySelectorAll("[data-pl-schedule]").forEach((el) => {
+      el.hidden = !scheduled;
+    });
+    if (!scheduled) {
+      createForm.frequency = "";
+      createForm.time = "";
+      createForm.timezone = "";
+      if (["frequency", "time", "timezone"].includes(openCreateSelect)) {
+        openCreateSelect = "";
+      }
+    }
+  }
+
+  function refreshCreateModal(root) {
+    const host = root.querySelector("[data-pl-modal]");
+    if (!host) return;
+    const next = document.createElement("div");
+    next.innerHTML = createModalMarkup();
+    host.replaceWith(next.firstElementChild);
+  }
+
+  function openCreate(root) {
+    createForm = emptyCreateForm();
+    openCreateSelect = "";
+    createOpen = false;
+    refreshCreateModal(root);
+
+    createOpen = true;
+    const modal = root.querySelector("[data-pl-modal]");
+    if (!modal) return;
+    modal.hidden = false;
+    modal.classList.remove("is-open");
+    syncCreateSchedule(root);
+    syncCreateSelects(root);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => modal.classList.add("is-open"));
+    });
+    window.setTimeout(() => {
+      modal.querySelector('[data-pl-input="name"]')?.focus();
+    }, 40);
+  }
+
+  function closeCreate(root) {
+    const modal = root.querySelector("[data-pl-modal]");
+    openCreateSelect = "";
+    if (!modal || modal.hidden) {
+      createOpen = false;
+      return;
+    }
+    createOpen = false;
+    modal.classList.remove("is-open");
+    window.setTimeout(() => {
+      if (!createOpen) {
+        modal.hidden = true;
+        refreshCreateModal(root);
+      }
+    }, 340);
+  }
+
   function skeletonMarkup() {
     const bone = (className = "") => `<span class="bone ${className}"></span>`;
     const rows = Array.from({ length: PAGE_SIZE }, () => `
@@ -344,13 +584,14 @@ export function PipelinesPage({ currentRoute = "/pipelines" } = {}) {
           </div>
           <div data-pipeline-pager>${pagerMarkup()}</div>
         </div>
+        ${createModalMarkup()}
       </div>
       <div class="toast" data-pl-toast role="status" aria-live="polite"></div>
     `;
   }
 
   function closeMenus(root) {
-    root.querySelectorAll(".ds-menu").forEach((menu) => {
+    root.querySelectorAll(".ds-menu:not(.al-select__menu)").forEach((menu) => {
       menu.hidden = true;
     });
     root.querySelectorAll("[data-filter-toggle], [data-row-menu]").forEach((btn) => {
@@ -401,24 +642,48 @@ export function PipelinesPage({ currentRoute = "/pipelines" } = {}) {
     toastTimer = window.setTimeout(() => toast.classList.remove("is-on"), 2200);
   }
 
-  function createPipeline(root) {
+  function submitCreate(root) {
+    const missing = CREATE_FIELDS.find((field) => !String(createForm[field.key] || "").trim());
+    if (missing) {
+      showToast(root, `Please fill in ${missing.label}.`);
+      const target = missing.key === "name"
+        ? root.querySelector('[data-pl-input="name"]')
+        : root.querySelector(`[data-pl-select-toggle="${missing.key}"]`);
+      target?.focus();
+      return;
+    }
+
+    if (createForm.mode === "Scheduled") {
+      const scheduleMissing = SCHEDULE_FIELDS.find((field) => !String(createForm[field.key] || "").trim());
+      if (scheduleMissing) {
+        showToast(root, `Please fill in ${scheduleMissing.label}.`);
+        root.querySelector(`[data-pl-select-toggle="${scheduleMissing.key}"]`)?.focus();
+        return;
+      }
+    }
+
+    const name = createForm.name.trim();
+    const schedule = createForm.mode === "Scheduled"
+      ? `${createForm.frequency} at ${createForm.time} (${createForm.timezone})`
+      : "Continuous";
     const pipeline = {
       id: `new-pipeline-${Date.now()}`,
-      name: nextCreatedPipelineName(),
-      source: "Mobile Application",
-      destination: "customer-events",
-      mode: "Real-time",
+      name,
+      source: createForm.source,
+      destination: createForm.destination,
+      mode: createForm.mode,
+      schedule,
       status: "Paused",
       health: "Healthy",
       throughput: "-",
       lastRun: "-",
-      owner: "Alex Morgan",
+      owner: createForm.owner,
       duration: "—",
       outputRecords: "—",
-      objectName: "Event Business Object",
     };
     addPipeline(pipeline);
     page = 1;
+    closeCreate(root);
     syncPage(root);
     showToast(root, `${pipeline.name} created.`);
   }
@@ -428,6 +693,13 @@ export function PipelinesPage({ currentRoute = "/pipelines" } = {}) {
     const { signal } = abort;
 
     root.addEventListener("input", (event) => {
+      const createInput = event.target.closest("[data-pl-input]");
+      if (createInput) {
+        const key = createInput.getAttribute("data-pl-input");
+        if (key && key in createForm) createForm[key] = createInput.value;
+        return;
+      }
+
       const search = event.target.closest("[data-pipeline-search]");
       if (!search) return;
       query = search.value;
@@ -440,9 +712,49 @@ export function PipelinesPage({ currentRoute = "/pipelines" } = {}) {
       const create = event.target.closest("[data-create-pipeline]");
       if (create) {
         event.preventDefault();
-        createPipeline(root);
+        closeMenus(root);
+        openCreate(root);
         return;
       }
+
+      if (event.target.closest("[data-pl-close]")) {
+        event.preventDefault();
+        closeCreate(root);
+        return;
+      }
+
+      if (event.target.closest("[data-pl-submit]")) {
+        event.preventDefault();
+        submitCreate(root);
+        return;
+      }
+
+      const createSelectToggle = event.target.closest("[data-pl-select-toggle]");
+      if (createSelectToggle) {
+        event.preventDefault();
+        const key = createSelectToggle.getAttribute("data-pl-select-toggle") || "";
+        openCreateSelect = openCreateSelect === key ? "" : key;
+        syncCreateSelects(root);
+        return;
+      }
+
+      const createSelectOption = event.target.closest("[data-pl-select-option]");
+      if (createSelectOption) {
+        event.preventDefault();
+        const key = createSelectOption.getAttribute("data-pl-select-option");
+        if (key && key in createForm) createForm[key] = createSelectOption.getAttribute("data-value") || "";
+        openCreateSelect = "";
+        if (key === "mode") syncCreateSchedule(root);
+        syncCreateSelects(root);
+        return;
+      }
+
+      if (createOpen && openCreateSelect && !event.target.closest(".al-select")) {
+        openCreateSelect = "";
+        syncCreateSelects(root);
+      }
+
+      if (createOpen && event.target.closest("[data-pl-modal]")) return;
 
       const stat = event.target.closest("[data-stat-key]");
       if (stat) {
@@ -511,7 +823,12 @@ export function PipelinesPage({ currentRoute = "/pipelines" } = {}) {
         if (!pipeline) return;
         if (action === "toggle") {
           const nextStatus = pipeline.status === "Running" ? "Paused" : "Running";
-          updatePipeline(id, { status: nextStatus });
+          const patch = { status: nextStatus };
+          if (nextStatus === "Running") {
+            patch.lastRun = "Just now";
+            addPipelineRun(id, { status: "Running" });
+          }
+          updatePipeline(id, patch);
           syncPage(root);
           showToast(root, `${pipeline.name} ${nextStatus === "Running" ? "started" : "paused"}.`);
           return;
@@ -568,7 +885,17 @@ export function PipelinesPage({ currentRoute = "/pipelines" } = {}) {
     }, { signal });
 
     window.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") closeMenus(root);
+      if (event.key !== "Escape") return;
+      if (createOpen && openCreateSelect) {
+        openCreateSelect = "";
+        syncCreateSelects(root);
+        return;
+      }
+      if (createOpen) {
+        closeCreate(root);
+        return;
+      }
+      closeMenus(root);
     }, { signal });
 
     window.addEventListener(STORE_EVENT, () => {

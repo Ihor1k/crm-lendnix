@@ -34,16 +34,6 @@ const screens = [
     subtitle: "Manage systems connected to the platform",
   },
   {
-    path: "/data-sources/new",
-    title: "Connect Data Source",
-    subtitle: "Configure a new connection",
-  },
-  {
-    path: "/data-sources/:id",
-    title: "Edit Data Source",
-    subtitle: "Update an existing connection",
-  },
-  {
     path: "/pipelines",
     title: "Pipelines",
     subtitle: "Monitor data processing workflows",
@@ -141,6 +131,18 @@ export function createRouter(appRoot) {
   router.on("/data-sources", () => {
     requireSession(() => {
       render(() => DataSourcePage({ currentRoute: "/data-sources" }));
+    });
+  });
+
+  router.on("/data-sources/new", () => {
+    requireSession(() => {
+      router.navigate("/data-sources");
+    });
+  });
+
+  router.on("/data-sources/:id", () => {
+    requireSession(() => {
+      router.navigate("/data-sources");
     });
   });
 

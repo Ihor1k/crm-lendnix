@@ -312,7 +312,7 @@
     background: transparent;
     border: 0;
     border-radius: 0;
-    cursor: default;
+    cursor: pointer;
 
     &.is-active {
       color: var(--text-icon-primary, #f5f5f5);

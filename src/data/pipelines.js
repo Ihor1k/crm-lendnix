@@ -420,6 +420,41 @@ export function pipelineNodes(pipeline) {
   ];
 }
 
+const extraRuns = new Map();
+const runPatches = new Map();
+
+function runTimestamp(date = new Date()) {
+  return date.toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+export function addPipelineRun(pipelineId, run = {}) {
+  const pipeline = getPipeline(pipelineId);
+  const records = pipeline
+    ? formatCount(parseCount(pipeline.outputRecords) || parseCount(pipeline.throughput))
+    : "—";
+  const entry = {
+    id: run.id || `${pipelineId}-run-${Date.now()}`,
+    started: run.started || runTimestamp(),
+    status: run.status || "Running",
+    records: run.records ?? records,
+    errors: run.errors ?? "0",
+    duration: run.duration ?? "—",
+  };
+  extraRuns.set(pipelineId, [entry, ...(extraRuns.get(pipelineId) || [])]);
+  return entry;
+}
+
+export function updatePipelineRun(runId, patch = {}) {
+  runPatches.set(runId, { ...(runPatches.get(runId) || {}), ...patch });
+  return runPatches.get(runId);
+}
+
 export function pipelineRuns(pipeline) {
   const count = parseCount(pipeline.outputRecords) || parseCount(pipeline.throughput) || 128430;
   const base = [
@@ -440,7 +475,7 @@ export function pipelineRuns(pipeline) {
     base[0] = { ...base[0], status: "Completed with warnings", errors: 12, duration: "5m 04s" };
   }
 
-  return base.map((row, index) => ({
+  const seeded = base.map((row, index) => ({
     id: `${pipeline.id}-${String(index + 1).padStart(2, "0")}`,
     started: row.started,
     status: row.status,
@@ -448,6 +483,9 @@ export function pipelineRuns(pipeline) {
     errors: String(row.errors),
     duration: row.duration,
   }));
+
+  return [...(extraRuns.get(pipeline.id) || []), ...seeded]
+    .map((row) => ({ ...row, ...(runPatches.get(row.id) || {}) }));
 }
 
 export function pipelineSchedule(pipeline) {
@@ -494,11 +532,13 @@ export function pipelineConfiguration(pipeline) {
       ? pipeline.duration
       : "4 min 12 sec",
     slaTarget: pipeline.slaTarget || "30 min",
-    slaStatus: failed ? "Breached" : warning ? "At Risk" : "On Track",
-    slaDetail: failed
-      ? "61.4% runs within SLA"
-      : warning
-        ? "88.1% runs within SLA"
-        : "99.2% runs within SLA",
+    slaStatus: pipeline.slaStatus
+      || (failed ? "Breached" : warning ? "At Risk" : "On Track"),
+    slaDetail: pipeline.slaDetail
+      || (failed
+        ? "61.4% runs within SLA"
+        : warning
+          ? "88.1% runs within SLA"
+          : "99.2% runs within SLA"),
   };
 }

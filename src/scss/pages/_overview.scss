@@ -109,6 +109,11 @@
   display: flex;
   align-items: center;
   gap: 8px;
+
+  .ds-filter,
+  .ds-actions {
+    position: relative;
+  }
 }
 
 .panel__link {

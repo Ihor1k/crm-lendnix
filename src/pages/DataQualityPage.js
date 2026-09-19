@@ -6,21 +6,65 @@ import { hydrateSharedStore, STORE_EVENT } from "../api/sharedStore.js";
 import { bone, createSkeletonLoader, skelTable, skelToolbar } from "../utils/skeleton.js";
 
 const LINE = "#15B3FA";
-const PATH_QUALITY = "M0.314941 86.4041L39.5142 54.5839C53.2429 43.4397 73.3157 45.097 85.0307 58.3419L99.4474 74.6414C111.56 88.3355 132.497 89.5727 146.137 77.4003L218.983 12.3968C228.511 3.89369 242.091 1.65212 253.847 6.64177L323.321 36.1286C331.674 39.6738 341.118 39.6231 349.432 35.9884L424.29 3.26312C431.376 0.165601 439.324 -0.345249 446.748 1.81974L559.315 34.6479";
-// Figma axis steps are even: 100%, 99%, 98%, 97%, 0 — path fills the top 4 steps.
+// Figma axis steps are even: 4 labelled steps plus a zero baseline — the series fills the top 4 steps.
 const PATH_H = 87;
 const BAND_PCT = 75;
 const SERIES_H = Math.round((PATH_H * 100) / BAND_PCT);
+const SERIES_W = 560;
+
+function smoothPath(points) {
+  if (points.length < 2) return "";
+  let d = `M${points[0].x.toFixed(2)} ${points[0].y.toFixed(2)}`;
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const p0 = points[i - 1] || points[i];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[i + 2] || p2;
+    const c1x = p1.x + (p2.x - p0.x) / 6;
+    const c1y = p1.y + (p2.y - p0.y) / 6;
+    const c2x = p2.x - (p3.x - p1.x) / 6;
+    const c2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C${c1x.toFixed(2)} ${c1y.toFixed(2)}, ${c2x.toFixed(2)} ${c2y.toFixed(2)}, ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`;
+  }
+  return d;
+}
+
+function qualityScale(points) {
+  const values = points.map((point) => Number(point.value) || 0);
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+  const span = Math.max(max - min, 0.2);
+  const hi = max + span * 0.4;
+  const lo = Math.max(0, min - span * 0.4);
+  return { hi, lo: lo === hi ? hi - 1 : lo, values };
+}
+
+function qualitySeries(points) {
+  const { hi, lo, values } = qualityScale(points);
+  const lastIndex = Math.max(1, values.length - 1);
+  const geometry = values.map((value, index) => ({
+    x: 0.31 + (index / lastIndex) * (SERIES_W - 0.62),
+    y: ((hi - value) / (hi - lo)) * PATH_H,
+  }));
+  const line = smoothPath(geometry);
+  const first = geometry[0];
+  const last = geometry[geometry.length - 1];
+  const area = `${line} L${last.x.toFixed(2)} ${SERIES_H} L${first.x.toFixed(2)} ${SERIES_H} Z`;
+  const step = (hi - lo) / 3;
+  const label = (value) => `${value.toFixed(1)}%`;
+  const ticks = [
+    { label: label(hi), y: 0, grid: true },
+    { label: label(hi - step), y: 25, grid: true },
+    { label: label(hi - step * 2), y: 50, grid: true },
+    { label: label(lo), y: 75, grid: true },
+    { label: "0", y: 100, grid: false },
+  ];
+  return { line, area, ticks };
+}
 
 function qualityChart(points) {
   const xLabels = points.map((point) => point.label);
-  const ticks = [
-    { label: "100%", y: 0, grid: true },
-    { label: "99%", y: 25, grid: true },
-    { label: "98%", y: 50, grid: true },
-    { label: "97%", y: 75, grid: true },
-    { label: "0", y: 100, grid: false },
-  ];
+  const { line, area, ticks } = qualitySeries(points);
 
   return `
     <div class="dq-plot" role="img" aria-label="Data quality over time">
@@ -42,7 +86,7 @@ function qualityChart(points) {
             />
           `).join("")}
         </svg>
-        <svg class="dq-plot__series" viewBox="0 0 560 ${SERIES_H}" preserveAspectRatio="none" aria-hidden="true">
+        <svg class="dq-plot__series" viewBox="0 0 ${SERIES_W} ${SERIES_H}" preserveAspectRatio="none" aria-hidden="true">
           <defs>
             <linearGradient id="dqGlow" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="${SERIES_H}">
               <stop offset="0%" stop-color="${LINE}" stop-opacity="0.3"/>
@@ -50,8 +94,8 @@ function qualityChart(points) {
               <stop offset="100%" stop-color="${LINE}" stop-opacity="0"/>
             </linearGradient>
           </defs>
-          <path d="${PATH_QUALITY} L559.315 ${SERIES_H} L0.314941 ${SERIES_H} Z" fill="url(#dqGlow)"/>
-          <path d="${PATH_QUALITY}" fill="none" stroke="${LINE}" stroke-width="2" vector-effect="non-scaling-stroke"/>
+          <path d="${area}" fill="url(#dqGlow)"/>
+          <path d="${line}" fill="none" stroke="${LINE}" stroke-width="2" vector-effect="non-scaling-stroke"/>
         </svg>
       </div>
     </div>
@@ -68,6 +112,21 @@ function statusClass(status) {
   if (status === "Open") return "is-open";
   if (status === "Investigating") return "is-investigating";
   return "is-resolved";
+}
+
+const RESOLVE_STATUSES = ["Open", "Investigating", "Resolved"];
+
+function resolveOptionsMarkup(id, currentStatus, attr = "data-dq-resolve-option") {
+  return RESOLVE_STATUSES.map((option) => `
+    <button
+      type="button"
+      role="menuitem"
+      ${attr}
+      data-id="${escapeHtmlAttr(id)}"
+      data-value="${escapeHtmlAttr(option)}"
+      class="${currentStatus === option ? "is-selected" : ""}"
+    >${escapeHtml(option)}</button>
+  `).join("");
 }
 
 export function DataQualityPage({ currentRoute = "/data-quality" } = {}) {
@@ -161,7 +220,7 @@ export function DataQualityPage({ currentRoute = "/data-quality" } = {}) {
 
   function kpiMarkup() {
     return data.metrics.map((metric) => `
-      <article class="dq-kpi">
+      <article class="dq-kpi" data-dq-kpi="${escapeHtmlAttr(metric.label)}">
         <p class="dq-kpi__label">${escapeHtml(metric.label)}</p>
         <strong class="dq-kpi__value">${escapeHtml(metric.value)}</strong>
         <p class="dq-kpi__trend">
@@ -269,14 +328,38 @@ export function DataQualityPage({ currentRoute = "/data-quality" } = {}) {
                   <td class="dq-table__muted">${escapeHtml(row.detected)}</td>
                   <td class="dq-table__muted">${escapeHtml(row.owner)}</td>
                   <td class="dq-table__actions">
-                    <button
-                      type="button"
-                      class="dq-menu__btn"
-                      data-dq-menu
-                      aria-label="More options"
-                    >
-                      ${icons.more}
-                    </button>
+                    <div class="ds-actions">
+                      <button
+                        type="button"
+                        class="dq-menu__btn"
+                        data-dq-menu="${escapeHtmlAttr(row.id)}"
+                        aria-label="More options for ${escapeHtmlAttr(row.issue)}"
+                        aria-haspopup="menu"
+                        aria-expanded="false"
+                      >
+                        ${icons.more}
+                      </button>
+                      <div class="ds-menu ds-menu--row" hidden role="menu">
+                        <button type="button" role="menuitem" data-dq-row-action="view" data-id="${escapeHtmlAttr(row.id)}">${icons.eye} View</button>
+                        <button type="button" role="menuitem" data-dq-row-action="assign" data-id="${escapeHtmlAttr(row.id)}">${icons.menuEdit} Assign</button>
+                        <div class="dq-resolve" data-dq-resolve-wrap>
+                          <button
+                            type="button"
+                            role="menuitem"
+                            data-dq-resolve-toggle
+                            data-id="${escapeHtmlAttr(row.id)}"
+                            aria-haspopup="menu"
+                            aria-expanded="false"
+                          >
+                            ${icons.statusCheck} Resolve
+                            ${icons.chevron}
+                          </button>
+                          <div class="ds-menu dq-resolve__menu" hidden role="menu">
+                            ${resolveOptionsMarkup(row.id, row.status)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </td>
                 </tr>
               `).join("") : `
@@ -374,10 +457,23 @@ export function DataQualityPage({ currentRoute = "/data-quality" } = {}) {
             </div>
             <footer class="dq-issue__foot">
               <button class="dq-issue__assign" type="button" data-dq-assign>Assign Owner</button>
-              <button class="dq-issue__resolve" type="button" data-dq-resolve>
-                ${icons.statusCheck}
-                Mark as resolved
-              </button>
+              <div class="dq-issue__resolve-wrap" data-dq-resolve-wrap>
+                <button
+                  class="dq-issue__resolve"
+                  type="button"
+                  data-dq-resolve-toggle
+                  data-id="${escapeHtmlAttr(issue.id)}"
+                  aria-haspopup="menu"
+                  aria-expanded="false"
+                >
+                  ${icons.statusCheck}
+                  ${escapeHtml(issue.status || "Resolve")}
+                  ${icons.chevron}
+                </button>
+                <div class="ds-menu dq-issue__resolve-menu" hidden role="menu">
+                  ${resolveOptionsMarkup(issue.id, issue.status)}
+                </div>
+              </div>
             </footer>
           ` : ""}
         </aside>
@@ -435,9 +531,29 @@ export function DataQualityPage({ currentRoute = "/data-quality" } = {}) {
     root.querySelectorAll(".ds-menu").forEach((menu) => {
       menu.hidden = true;
     });
-    root.querySelectorAll("[data-dq-filter-toggle], [data-dq-chart-toggle]").forEach((btn) => {
+    root.querySelectorAll(
+      "[data-dq-filter-toggle], [data-dq-chart-toggle], [data-dq-menu], [data-dq-resolve-toggle]",
+    ).forEach((btn) => {
       btn.setAttribute("aria-expanded", "false");
     });
+  }
+
+  function closeResolveMenus(root) {
+    root.querySelectorAll(".dq-resolve__menu, .dq-issue__resolve-menu").forEach((menu) => {
+      menu.hidden = true;
+    });
+    root.querySelectorAll("[data-dq-resolve-toggle]").forEach((btn) => {
+      btn.setAttribute("aria-expanded", "false");
+    });
+  }
+
+  function applyResolveChoice(root, id, value) {
+    const issue = data.issues.find((row) => row.id === id);
+    if (!issue || !RESOLVE_STATUSES.includes(value)) return;
+    updateIssue(id, { status: value });
+    refreshIssues(root);
+    if (selectedIssueId === id) refreshDrawer(root, { animate: false });
+    showToast(root, `${issue.issue} set to ${value}.`);
   }
 
   function showToast(root, message) {
@@ -597,10 +713,68 @@ export function DataQualityPage({ currentRoute = "/data-quality" } = {}) {
         return;
       }
 
+      const rowAction = event.target.closest("[data-dq-row-action]");
+      if (rowAction) {
+        event.preventDefault();
+        event.stopPropagation();
+        const id = rowAction.getAttribute("data-id") || "";
+        const action = rowAction.getAttribute("data-dq-row-action");
+        const issue = data.issues.find((row) => row.id === id);
+        closeMenus(root);
+        if (!issue) return;
+        if (action === "view") {
+          openIssue(root, id);
+          return;
+        }
+        if (action === "assign") {
+          const current = issue.assignee || assignees[0];
+          const next = assignees[(assignees.indexOf(current) + 1) % assignees.length];
+          updateIssue(id, { assignee: next, owner: issue.owner });
+          refreshIssues(root);
+          if (selectedIssueId === id) refreshDrawer(root, { animate: false });
+          showToast(root, `${issue.issue} assigned to ${next}.`);
+          return;
+        }
+        return;
+      }
+
+      const resolveOption = event.target.closest("[data-dq-resolve-option]");
+      if (resolveOption) {
+        event.preventDefault();
+        event.stopPropagation();
+        const id = resolveOption.getAttribute("data-id") || "";
+        const value = resolveOption.getAttribute("data-value") || "";
+        closeMenus(root);
+        applyResolveChoice(root, id, value);
+        return;
+      }
+
+      const resolveToggle = event.target.closest("[data-dq-resolve-toggle]");
+      if (resolveToggle) {
+        event.preventDefault();
+        event.stopPropagation();
+        const wrap = resolveToggle.closest("[data-dq-resolve-wrap]");
+        const menu = wrap?.querySelector(".dq-resolve__menu, .dq-issue__resolve-menu");
+        const willOpen = Boolean(menu?.hidden);
+        closeResolveMenus(root);
+        if (menu && willOpen) {
+          menu.hidden = false;
+          resolveToggle.setAttribute("aria-expanded", "true");
+        }
+        return;
+      }
+
       const menuBtn = event.target.closest("[data-dq-menu]");
       if (menuBtn) {
         event.preventDefault();
         event.stopPropagation();
+        const menu = menuBtn.parentElement?.querySelector(".ds-menu--row");
+        const willOpen = Boolean(menu?.hidden);
+        closeMenus(root);
+        if (menu && willOpen) {
+          menu.hidden = false;
+          menuBtn.setAttribute("aria-expanded", "true");
+        }
         return;
       }
 
@@ -620,13 +794,19 @@ export function DataQualityPage({ currentRoute = "/data-quality" } = {}) {
         return;
       }
 
-      if (event.target.closest("[data-dq-resolve]")) {
-        const issue = selectedIssue();
-        if (!issue) return;
-        updateIssue(issue.id, { status: "Resolved" });
-        showToast(root, `${issue.issue} marked as resolved.`);
-        closeIssue(root);
-        refreshIssues(root);
+      if (!event.target.closest("[data-dq-resolve-wrap]")) closeResolveMenus(root);
+
+      const kpiCard = event.target.closest("[data-dq-kpi]");
+      if (kpiCard) {
+        const label = kpiCard.dataset.dqKpi || "";
+        closeMenus(root);
+        if (!data.dimensions.includes(label)) {
+          showToast(root, `${label} is within the expected range.`);
+          return;
+        }
+        dimension = label;
+        refreshChart(root);
+        showToast(root, `Showing ${label} over time.`);
         return;
       }
 
@@ -637,7 +817,7 @@ export function DataQualityPage({ currentRoute = "/data-quality" } = {}) {
         return;
       }
 
-      if (!event.target.closest(".ds-filter")) {
+      if (!event.target.closest(".ds-filter, .ds-actions, [data-dq-resolve-wrap]")) {
         closeMenus(root);
       }
     }, { signal });
