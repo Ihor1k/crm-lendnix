@@ -194,6 +194,18 @@ export function createRouter(appRoot) {
     });
   });
 
+  router.on("/customer-360/:id", (match) => {
+    requireSession(() => {
+      const id = match?.data?.id ?? "";
+      render(() =>
+        CustomerPage({
+          currentRoute: `/customer-360/${id}`,
+          customerId: id,
+        }),
+      );
+    });
+  });
+
   router.on("/customer-360", () => {
     requireSession(() => {
       render(() => CustomerPage({ currentRoute: "/customer-360" }));
@@ -229,6 +241,7 @@ export function createRouter(appRoot) {
       && item.path !== "/data-catalog"
       && item.path !== "/data-quality"
       && item.path !== "/customer-360"
+      && item.path !== "/customer-360/:id"
       && item.path !== "/reports"
       && item.path !== "/alerts"
       && item.path !== "/settings",

@@ -1,6 +1,6 @@
 .rp-page {
   display: grid;
-  gap: 16px;
+  gap: 12px;
 }
 
 .rp-tabs {
@@ -56,7 +56,7 @@
 
 .rp-view {
   display: grid;
-  gap: 16px;
+  gap: 12px;
   opacity: 1;
   transform: translateY(0);
   transition:
@@ -72,6 +72,11 @@
   &.is-enter {
     animation: rp-view-in 380ms cubic-bezier(0.22, 1, 0.36, 1);
   }
+}
+
+[data-rp-dashboard] {
+  display: grid;
+  gap: 12px;
 }
 
 @keyframes rp-view-in {

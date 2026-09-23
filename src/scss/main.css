@@ -1677,9 +1677,6 @@ button {
   color: #fff;
   font-weight: 500;
 }
-.ds-table__name:hover {
-  color: #d4c9ff;
-}
 .ds-table__muted {
   color: #8b8b96;
 }

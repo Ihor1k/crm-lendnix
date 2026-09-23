@@ -23,7 +23,7 @@ const REVENUE_AREA =
 const REVENUE_LINE =
   "M346 74.1533C343.318 73.1647 336.948 74.1545 330.913 74.1545C323.37 74.1545 311.875 79.6178 304.332 83.5712C296.789 87.5245 284.893 92.5712 274.332 92.5712C263.771 92.5712 246.743 64.0735 238.332 62.5703C227.268 60.593 221.898 -2.40001 210.332 0.0708173C199.747 2.33202 191.872 13.5712 184.832 13.5712C177.792 13.5712 166.87 71.0673 160.332 71.0673C153.794 71.0673 142.233 78.3596 134.332 76.5673C127.794 75.0842 112.867 82.5769 106.832 83.0712C100.797 83.5655 85.1625 100.15 75.832 99.0712C67.2829 98.0832 48.289 81.5673 43.2601 81.5673C38.2312 81.5673 29.3725 80.0655 22.332 79.5712C16.6997 79.1758 3.69942 78.9312 -2 81.5673";
 
-function revenueChart() {
+function revenueChart(xLabels = ["00:00", "04:00", "08:00", "12:00", "16:00", "20:00"], scaleY = 1) {
   const plotX = 44;
   const plotY = 10;
   const plotW = 342;
@@ -37,7 +37,8 @@ function revenueChart() {
     { label: "500", t: 0.75 },
     { label: "0", t: 1 },
   ];
-  const xLabels = ["00:00", "04:00", "08:00", "12:00", "16:00", "20:00"];
+  const labels = xLabels.length ? xLabels : ["00:00", "04:00", "08:00", "12:00", "16:00", "20:00"];
+  const safeScale = Math.min(1.15, Math.max(0.7, scaleY));
 
   const grid = yTicks.map(({ label, t }) => {
     const gy = plotY + plotH * t;
@@ -47,10 +48,18 @@ function revenueChart() {
     `;
   }).join("");
 
-  const xAxis = xLabels.map((label, i) => {
-    const x = plotX + (i / (xLabels.length - 1)) * plotW;
+  const xAxis = labels.map((label, i) => {
+    const x = plotX + (i / Math.max(labels.length - 1, 1)) * plotW;
     return `<text x="${x}" y="${height - 6}" text-anchor="middle" fill="#6f6f7a" font-size="11">${label}</text>`;
   }).join("");
+
+  const originY = 138.57;
+  const scaledGroup = `
+    <g transform="translate(0 ${originY}) scale(1 ${safeScale}) translate(0 ${-originY})">
+      <path d="${REVENUE_AREA}" fill="url(#paint0_linear_rp_revenue)" fill-opacity="0.1"/>
+      <path d="${REVENUE_LINE}" fill="none" stroke="#15B3FA" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    </g>
+  `;
 
   return `
     <div class="rp-chart">
@@ -64,8 +73,7 @@ function revenueChart() {
         ${grid}
         <line x1="${plotX}" y1="${plotY + plotH}" x2="${plotX + plotW}" y2="${plotY + plotH}" stroke="#2a2a30" stroke-width="1"/>
         <g transform="translate(${plotX} ${plotY})">
-          <path d="${REVENUE_AREA}" fill="url(#paint0_linear_rp_revenue)" fill-opacity="0.1"/>
-          <path d="${REVENUE_LINE}" fill="none" stroke="#15B3FA" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+          ${scaledGroup}
         </g>
         ${xAxis}
       </svg>
@@ -103,6 +111,13 @@ const FILTER_OPTIONS = {
   segment: ["All segments", "High-Value", "Active Mobile", "At Risk"],
   device: ["All devices", "iOS", "Android", "Web"],
   currency: ["All currencies", "EUR", "USD", "GBP"],
+};
+
+const REVENUE_X_BY_RANGE = {
+  "Last 7 days": ["Aug 3", "Aug 4", "Aug 5", "Aug 6", "Aug 7", "Aug 9"],
+  "Last 30 days": ["Jul 11", "Jul 16", "Jul 21", "Jul 26", "Aug 5", "Aug 9"],
+  "This quarter": ["Apr", "May", "Jun", "Jul", "Aug", "Sep"],
+  "Year to date": ["Jan", "Mar", "May", "Jul", "Sep", "Nov"],
 };
 
 const OPEN_ACTIONS = [
@@ -165,9 +180,80 @@ export function ReportsPage({ currentRoute = "/reports" } = {}) {
       if (!value) return;
       const options = FILTER_OPTIONS[filter.id] || [];
       const index = Math.max(0, options.indexOf(value));
-      factor *= 1 + ((index % 4) - 1) * 0.017;
+      factor *= 0.84 + index * 0.1;
     });
+    const viewIndex = Math.max(0, REPORT_VIEWS.indexOf(view));
+    factor *= 0.94 + viewIndex * 0.04;
     return factor;
+  }
+
+  function filteredDashboard() {
+    const factor = kpiFactor();
+    const dateRange = filterValues.dateRange || "";
+    const country = filterValues.country || "";
+    const segment = filterValues.segment || "";
+
+    const kpis = REPORT_KPIS.map((kpi) => ({
+      ...kpi,
+      value: scaleValue(kpi.value, factor),
+      trend: scaleValue(kpi.trend, 0.9 + (factor - 1) * 0.5),
+    }));
+
+    const funnel = FUNNEL_STAGES.map((stage, index) => ({
+      ...stage,
+      value: scaleValue(stage.value, factor * (1 - index * 0.015)),
+    }));
+
+    let segments = SEGMENT_DISTRIBUTION.map((item) => ({ ...item }));
+    if (segment && segment !== "All segments") {
+      const needle = segment.toLowerCase();
+      segments = segments.map((item) => {
+        const label = item.label.toLowerCase();
+        const boosted = (needle.includes("high-value") && label.includes("high-value"))
+          || (needle.includes("active mobile") && label.includes("active mobile"))
+          || (needle.includes("at risk") && label.includes("at risk"));
+        return {
+          ...item,
+          value: Number((item.value * (boosted ? 1.35 : 0.82)).toFixed(1)),
+        };
+      });
+      const total = segments.reduce((sum, item) => sum + item.value, 0) || 1;
+      segments = segments.map((item) => ({
+        ...item,
+        value: Number(((item.value / total) * 100).toFixed(1)),
+      }));
+    }
+
+    const cohorts = COHORT_ROWS.map((row) => ({
+      ...row,
+      values: row.values.map((value) => {
+        if (value == null) return value;
+        return Math.max(1, Math.min(100, Math.round(value * (0.92 + (factor - 1) * 0.4))));
+      }),
+    }));
+
+    let geo = GEO_REVENUE.map((item) => ({
+      ...item,
+      value: scaleValue(item.value, factor),
+    }));
+    if (country && country !== "All countries") {
+      geo = [...geo].sort((a, b) => {
+        const aMatch = a.country === country ? 0 : 1;
+        const bMatch = b.country === country ? 0 : 1;
+        return aMatch - bMatch;
+      }).map((item) => (
+        item.country === country
+          ? { ...item, value: scaleValue(item.value, 1.18) }
+          : { ...item, value: scaleValue(item.value, 0.88) }
+      ));
+    }
+
+    const xLabels = REVENUE_X_BY_RANGE[dateRange]
+      || ["00:00", "04:00", "08:00", "12:00", "16:00", "20:00"];
+    const rangeIndex = FILTER_OPTIONS.dateRange.indexOf(dateRange);
+    const chartScale = dateRange ? 0.78 + Math.max(0, rangeIndex + 1) * 0.08 : 1;
+
+    return { kpis, funnel, segments, cohorts, geo, xLabels, chartScale };
   }
 
   function tabsMarkup() {
@@ -257,11 +343,11 @@ export function ReportsPage({ currentRoute = "/reports" } = {}) {
   }
 
   function kpiCardsMarkup() {
-    const factor = kpiFactor();
-    return REPORT_KPIS.map((kpi) => `
+    const { kpis } = filteredDashboard();
+    return kpis.map((kpi) => `
       <article class="rp-kpi">
         <p>${escapeHtml(kpi.label)}</p>
-        <strong>${escapeHtml(scaleValue(kpi.value, factor))}</strong>
+        <strong>${escapeHtml(kpi.value)}</strong>
         <span class="rp-kpi__trend">↑ ${escapeHtml(kpi.trend)} <em>vs previous period</em></span>
       </article>
     `).join("");
@@ -271,12 +357,13 @@ export function ReportsPage({ currentRoute = "/reports" } = {}) {
     return `<section class="rp-kpis">${kpiCardsMarkup()}</section>`;
   }
 
-  function refreshKpis(root) {
-    const host = root.querySelector(".rp-kpis");
-    if (host) host.innerHTML = kpiCardsMarkup();
+  function refreshDashboard(root) {
+    const host = root.querySelector("[data-rp-dashboard]");
+    if (host) host.innerHTML = dashboardMarkup();
   }
 
   function funnelMarkup() {
+    const { funnel } = filteredDashboard();
     return `
       <div class="rp-funnel">
         <div class="rp-funnel__chart" aria-hidden="true">
@@ -288,7 +375,7 @@ export function ReportsPage({ currentRoute = "/reports" } = {}) {
           </svg>
         </div>
         <ul class="rp-funnel__legend">
-          ${FUNNEL_STAGES.map((stage) => `
+          ${funnel.map((stage) => `
             <li>
               <span class="rp-funnel__swatch" style="--rp-funnel-color:${stage.color}" aria-hidden="true"></span>
               <div class="rp-funnel__copy">
@@ -304,6 +391,7 @@ export function ReportsPage({ currentRoute = "/reports" } = {}) {
   }
 
   function cohortMarkup() {
+    const { cohorts } = filteredDashboard();
     return `
       <div class="rp-cohort">
         <table>
@@ -317,7 +405,7 @@ export function ReportsPage({ currentRoute = "/reports" } = {}) {
             </tr>
           </thead>
           <tbody>
-            ${COHORT_ROWS.map((row) => `
+            ${cohorts.map((row) => `
               <tr>
                 <th scope="row">${escapeHtml(row.cohort)}</th>
                 ${row.values.map((value) => `
@@ -336,13 +424,14 @@ export function ReportsPage({ currentRoute = "/reports" } = {}) {
   }
 
   function geoMarkup() {
+    const { geo } = filteredDashboard();
     return `
       <div class="rp-geo">
         <div class="rp-geo__map">
           <img class="rp-map" src="${worldMapUrl}" width="401" height="193" alt="Revenue by geography" />
         </div>
         <ul class="rp-geo__list">
-          ${GEO_REVENUE.map((item) => `
+          ${geo.map((item) => `
             <li>
               <span class="rp-geo__country">
                 ${flagIcon(item.code)}
@@ -357,6 +446,7 @@ export function ReportsPage({ currentRoute = "/reports" } = {}) {
   }
 
   function dashboardMarkup() {
+    const { segments, xLabels, chartScale } = filteredDashboard();
     return `
       ${kpisMarkup()}
       <section class="rp-mid">
@@ -364,7 +454,7 @@ export function ReportsPage({ currentRoute = "/reports" } = {}) {
           <header class="rp-panel__head">
             <h3>Revenue Over Time</h3>
           </header>
-          ${revenueChart()}
+          ${revenueChart(xLabels, chartScale)}
         </article>
         <article class="rp-panel rp-panel--funnel">
           <header class="rp-panel__head">
@@ -379,7 +469,7 @@ export function ReportsPage({ currentRoute = "/reports" } = {}) {
           <div class="rp-segments">
             ${donutChart()}
             <ul class="rp-legend">
-              ${SEGMENT_DISTRIBUTION.map((seg) => `
+              ${segments.map((seg) => `
                 <li>
                   <span class="rp-legend__swatch" style="--rp-swatch:${seg.color}"></span>
                   <span class="rp-legend__label">${escapeHtml(seg.label)}</span>
@@ -481,7 +571,7 @@ export function ReportsPage({ currentRoute = "/reports" } = {}) {
 
   function contentMarkup() {
     return tab === "dashboard"
-      ? `${filtersMarkup()}${dashboardMarkup()}`
+      ? `${filtersMarkup()}<div data-rp-dashboard>${dashboardMarkup()}</div>`
       : reportsListMarkup();
   }
 
@@ -681,13 +771,17 @@ export function ReportsPage({ currentRoute = "/reports" } = {}) {
       const viewOption = event.target.closest("[data-rp-view-option]");
       if (viewOption) {
         event.preventDefault();
-        view = viewOption.getAttribute("data-value") || REPORT_VIEWS[0];
+        const nextView = viewOption.getAttribute("data-value") || REPORT_VIEWS[0];
+        const changed = nextView !== view;
+        view = nextView;
         const label = root.querySelector("[data-rp-view-label]");
         if (label) label.textContent = view;
         syncMenuSelection(viewOption.closest(".ds-menu"), view);
         closeFilterMenus();
-        refreshKpis(root);
-        showToast(`${view} view applied.`);
+        if (changed) {
+          refreshDashboard(root);
+          showToast(`${view} view applied.`);
+        }
         return;
       }
 
@@ -696,7 +790,9 @@ export function ReportsPage({ currentRoute = "/reports" } = {}) {
         event.preventDefault();
         const id = filterOption.getAttribute("data-rp-filter-option") || "";
         const value = filterOption.getAttribute("data-value") || "";
-        if (!id) return;
+        if (!id || !value) return;
+        const previous = filterValues[id] || "";
+        const changed = previous !== value;
         filterValues[id] = value;
         const label = root.querySelector(`[data-rp-filter-label="${id}"]`);
         const btn = root.querySelector(`[data-rp-filter="${id}"]`);
@@ -704,8 +800,10 @@ export function ReportsPage({ currentRoute = "/reports" } = {}) {
         btn?.classList.add("is-filled");
         syncMenuSelection(filterOption.closest(".ds-menu"), value);
         closeFilterMenus();
-        refreshKpis(root);
-        showToast(`Filter applied: ${value}.`);
+        if (changed) {
+          refreshDashboard(root);
+          showToast(`Filter applied: ${value}.`);
+        }
         return;
       }
 

@@ -69,6 +69,24 @@ export function getCustomer(id) {
   return CUSTOMERS.find((item) => item.id === id) ?? null;
 }
 
+export function ensureCustomer(id) {
+  const normalized = String(id || "").trim().replace(/^#/, "").replace(/^customer\s*#?/i, "");
+  if (!normalized) return null;
+  const existing = getCustomer(normalized);
+  if (existing) return existing;
+
+  const template = CUSTOMERS[0];
+  const created = {
+    ...JSON.parse(JSON.stringify(template)),
+    id: normalized,
+    label: `Customer #${normalized}`,
+    email: `customer.${normalized}@example.com`,
+    account: `ACC-${normalized}`,
+  };
+  CUSTOMERS.push(created);
+  return created;
+}
+
 export function searchCustomers(query) {
   const q = String(query || "").trim().toLowerCase();
   if (!q) return listCustomers();

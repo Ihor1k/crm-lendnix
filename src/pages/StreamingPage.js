@@ -26,20 +26,95 @@ const KPIS = [
 
 const CLUSTERS = ["Production Cluster", "Staging Cluster", "Analytics Cluster"];
 
+const CHART_Y_LABELS = ["0", "500", "1K", "1,5K", "2K"];
+const CHART_X_TODAY = ["00:00", "04:00", "08:00", "12:00", "16:00", "20:00"];
+
+const THROUGHPUT_RANGES = {
+  Today: {
+    xLabels: CHART_X_TODAY,
+    yLabels: CHART_Y_LABELS,
+    // Normalized 0–1 against 2K. Matches Figma: rising in/out with mid-day push.
+    inSeries: [0.08, 0.18, 0.34, 0.42, 0.36, 0.52, 0.61, 0.48, 0.58, 0.72, 0.66, 0.88, 0.94, 0.78, 0.86, 0.98],
+    outSeries: [0.14, 0.24, 0.38, 0.4, 0.3, 0.46, 0.55, 0.42, 0.5, 0.62, 0.52, 0.7, 0.78, 0.6, 0.68, 0.82],
+  },
+  "Last 7 days": {
+    xLabels: ["Aug 3", "Aug 4", "Aug 5", "Aug 6", "Aug 7", "Aug 8", "Aug 9"],
+    yLabels: CHART_Y_LABELS,
+    inSeries: [0.42, 0.5, 0.46, 0.68, 0.6, 0.78, 0.94],
+    outSeries: [0.34, 0.42, 0.38, 0.58, 0.5, 0.68, 0.82],
+  },
+  "Last 30 days": {
+    xLabels: ["Jul 11", "Jul 16", "Jul 21", "Jul 26", "Jul 31", "Aug 5", "Aug 9"],
+    yLabels: CHART_Y_LABELS,
+    inSeries: [0.32, 0.4, 0.48, 0.44, 0.64, 0.78, 0.96],
+    outSeries: [0.26, 0.34, 0.4, 0.36, 0.54, 0.68, 0.86],
+  },
+};
+
+const LAG_RANGES = {
+  Today: {
+    xLabels: CHART_X_TODAY,
+    yLabels: CHART_Y_LABELS,
+    // reporting-service peaks near 1.5K around 12:00; others stay low.
+    reporting: [0.54, 0.5, 0.46, 0.52, 0.62, 0.78, 0.38, 0.5, 0.56, 0.5, 0.46, 0.52],
+    fraud: [0.13, 0.11, 0.14, 0.12, 0.15, 0.13, 0.11, 0.14, 0.12, 0.13, 0.11, 0.1],
+    profile: [0.07, 0.06, 0.08, 0.07, 0.09, 0.08, 0.06, 0.07, 0.08, 0.07, 0.06, 0.05],
+  },
+  "Last 7 days": {
+    xLabels: ["Aug 3", "Aug 4", "Aug 5", "Aug 6", "Aug 7", "Aug 8", "Aug 9"],
+    yLabels: CHART_Y_LABELS,
+    reporting: [0.44, 0.5, 0.42, 0.72, 0.56, 0.68, 0.6],
+    fraud: [0.16, 0.18, 0.14, 0.22, 0.2, 0.24, 0.2],
+    profile: [0.08, 0.1, 0.08, 0.12, 0.11, 0.14, 0.12],
+  },
+  "Last 30 days": {
+    xLabels: ["Jul 11", "Jul 16", "Jul 21", "Jul 26", "Jul 31", "Aug 5", "Aug 9"],
+    yLabels: CHART_Y_LABELS,
+    reporting: [0.38, 0.44, 0.5, 0.46, 0.62, 0.74, 0.7],
+    fraud: [0.12, 0.14, 0.18, 0.16, 0.22, 0.26, 0.24],
+    profile: [0.06, 0.08, 0.1, 0.09, 0.12, 0.14, 0.13],
+  },
+};
+
 function showToast(message) {
   window.dispatchEvent(new CustomEvent("lendnix:toast", { detail: { message } }));
 }
 
 const TOPICS = listTopics();
 
-const CHART_X = ["00:00", "04:00", "08:00", "12:00", "16:00", "20:00"];
-const CHART_Y = ["0", "500", "1K", "1.5K", "2K"];
+function smoothPath(points) {
+  if (points.length < 2) return "";
+  let d = `M${points[0].x.toFixed(2)} ${points[0].y.toFixed(2)}`;
+  for (let i = 0; i < points.length - 1; i += 1) {
+    const p0 = points[i - 1] || points[i];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[i + 2] || p2;
+    const c1x = p1.x + (p2.x - p0.x) / 6;
+    const c1y = p1.y + (p2.y - p0.y) / 6;
+    const c2x = p2.x - (p3.x - p1.x) / 6;
+    const c2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C${c1x.toFixed(2)} ${c1y.toFixed(2)}, ${c2x.toFixed(2)} ${c2y.toFixed(2)}, ${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`;
+  }
+  return d;
+}
 
-const PATH_THROUGHPUT_OUT = "M0.315918 78.2368L13.7377 67.2947L26.6003 56.3526L39.7425 52.7052L52.605 61.2158L65.7472 45.4105L78.8894 31.2263L92.3112 37.7105L105.174 52.7052L118.036 56.3526L131.458 45.4105L144.041 37.7105L157.742 56.3526L170.885 40.5473L183.747 28.7947L197.169 16.2316L209.472 34.0631L223.174 45.4105L236.036 23.121L249.738 4.88418L262.041 16.2316L275.463 8.53155L288.325 16.2316L301.468 8.53155L315.169 23.121L328.032 45.4105L341.453 1.23682L354.316 23.121";
-const PATH_THROUGHPUT_IN = "M0.227051 115.364L13.6928 108.505L26.878 93.9783L39.7826 97.2064L52.9678 93.9783L66.153 73.8029L79.3382 82.68L92.2428 89.9432L105.709 108.505L119.174 87.5222L132.359 79.8555L144.984 93.9783L158.169 82.68L171.915 73.8029L184.82 55.2415L197.444 82.68L210.909 89.9432L224.375 70.5748L237.28 44.3467L251.026 73.8029L263.37 87.5222L276.555 70.5748L289.74 23.3643L303.206 34.6625L315.83 41.1186L329.576 7.22391L342.481 13.2765L356.227 0.364258";
-const PATH_LAG_BLUE = "M-2 82.0678C3.69942 79.4317 16.6997 79.6763 22.332 80.0717C29.3725 80.5659 38.2312 82.0678 43.2601 82.0678C48.289 82.0678 67.2829 98.5837 75.832 99.5717C85.1625 100.65 100.797 84.0659 106.832 83.5717C112.867 83.0774 127.794 75.5847 134.332 77.0678C142.233 78.8601 153.794 71.5678 160.332 71.5678C166.87 71.5678 177.792 14.0717 184.832 14.0717C191.872 14.0717 199.747 2.8325 210.332 0.571305C221.899 -1.89952 227.268 61.0935 238.332 63.0708C246.743 64.574 263.771 93.0717 274.332 93.0717C284.893 93.0717 296.789 88.025 304.332 84.0717C311.875 80.1183 323.37 74.655 330.913 74.655C336.948 74.655 343.318 73.6651 346 74.6538";
-const PATH_LAG_PURPLE = "M-2 11C3.69942 8.36391 15.1997 10.6046 20.832 11C27.8725 11.4943 38.2312 11 43.2601 11C48.289 11 67.2829 13.012 75.832 14C85.1625 15.0783 97.7973 11.4943 103.832 11C109.867 10.5057 127.794 4.51693 134.332 6C142.233 7.79232 153.794 0.5 160.332 0.5C166.87 0.5 177.532 7.53935 184.572 7.53935C191.613 7.53935 202.247 4.2651 212.832 2.00391C224.399 -0.466921 231.768 8.02656 242.832 10.0039C251.243 11.5071 263.771 22.0039 274.332 22.0039C284.893 22.0039 296.789 16.9573 304.332 13.0039C311.875 9.05055 323.37 3.58722 330.913 3.58722C336.948 3.58722 343.318 2.59737 346 3.58599";
-const PATH_LAG_GREEN = "M-2 8.5C3.69942 5.86391 16.0035 4.64393 21.6358 5.03935C28.6763 5.53361 38.2312 8.5 43.2601 8.5C48.289 8.5 69.4104 4.05132 77.9595 5.03935C87.29 6.11767 97.5723 5.53361 103.607 5.03935C109.642 4.54508 127.243 -0.397083 133.78 1.08599C141.681 2.87831 149.873 8.5 156.41 8.5C162.948 8.5 177.532 5.03935 184.572 5.03935C191.613 5.03935 195.611 7.30055 206.197 5.03935C217.763 2.56852 229.832 -0.89135 240.896 1.08599C249.307 2.58922 259.503 5.03935 270.064 5.03935C280.624 5.03935 295.208 8.9927 302.751 5.03935C310.295 1.08599 323.37 1.08722 330.913 1.08722C336.948 1.08722 343.318 0.0973664 346 1.08599";
+function seriesToPoints(values, width, height) {
+  const n = values.length;
+  if (!n) return [];
+  return values.map((value, index) => ({
+    x: n === 1 ? width / 2 : (index / (n - 1)) * width,
+    y: (1 - Math.min(1, Math.max(0, value))) * height,
+  }));
+}
+
+function getThroughputRange(range) {
+  return THROUGHPUT_RANGES[range] || THROUGHPUT_RANGES.Today;
+}
+
+function getLagRange(range) {
+  return LAG_RANGES[range] || LAG_RANGES.Today;
+}
 
 function axisFrame(yLabels, xLabels) {
   return `
@@ -93,22 +168,44 @@ export function StreamingPage({ currentRoute = "/streaming" } = {}) {
     });
   }
 
+  function areaFromLine(points, height) {
+    if (!points.length) return "";
+    const first = points[0];
+    const last = points[points.length - 1];
+    return `${smoothPath(points)} L${last.x.toFixed(2)} ${height} L${first.x.toFixed(2)} ${height} Z`;
+  }
+
   function throughputChart() {
+    const data = getThroughputRange(throughputRange);
+    const width = 360;
+    const height = 168;
+    const inPts = seriesToPoints(data.inSeries, width, height);
+    const outPts = seriesToPoints(data.outSeries, width, height);
+    const inLine = smoothPath(inPts);
+    const outLine = smoothPath(outPts);
+    const inArea = areaFromLine(inPts, height);
+    const outArea = areaFromLine(outPts, height);
+
     return `
-      <div class="st-plot" role="img" aria-label="Message throughput">
-        ${axisFrame(CHART_Y, CHART_X)}
+      <div class="st-plot" role="img" aria-label="Message throughput for ${escapeHtmlAttr(throughputRange)}">
+        ${axisFrame(data.yLabels, data.xLabels)}
         <div class="st-plot__canvas">
           ${plotGrid()}
-          <svg class="st-plot__series" viewBox="0 0 356 116" preserveAspectRatio="none" aria-hidden="true">
+          <svg class="st-plot__series" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-hidden="true">
             <defs>
-              <linearGradient id="st-throughput-glow" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#7B65FF" stop-opacity="0.35"/>
+              <linearGradient id="st-throughput-in-glow" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#7B65FF" stop-opacity="0.28"/>
                 <stop offset="100%" stop-color="#7B65FF" stop-opacity="0"/>
               </linearGradient>
+              <linearGradient id="st-throughput-out-glow" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#3065F8" stop-opacity="0.16"/>
+                <stop offset="100%" stop-color="#3065F8" stop-opacity="0"/>
+              </linearGradient>
             </defs>
-            <path d="${PATH_THROUGHPUT_IN} L356.227 116 L0.227 116 Z" fill="url(#st-throughput-glow)"/>
-            <path d="${PATH_THROUGHPUT_OUT}" transform="translate(0 18)" fill="none" stroke="#3065F8" stroke-width="1.6" stroke-dasharray="2 2" vector-effect="non-scaling-stroke"/>
-            <path d="${PATH_THROUGHPUT_IN}" fill="none" stroke="#7B65FF" stroke-width="2" vector-effect="non-scaling-stroke"/>
+            <path d="${outArea}" fill="url(#st-throughput-out-glow)"/>
+            <path d="${inArea}" fill="url(#st-throughput-in-glow)"/>
+            <path d="${outLine}" fill="none" stroke="#9BB0FF" stroke-width="1.8" stroke-dasharray="4 3" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+            <path d="${inLine}" fill="none" stroke="#7B65FF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
           </svg>
         </div>
       </div>
@@ -116,28 +213,42 @@ export function StreamingPage({ currentRoute = "/streaming" } = {}) {
   }
 
   function lagChart() {
+    const data = getLagRange(lagRange);
+    const width = 360;
+    const height = 168;
+    const reportingPts = seriesToPoints(data.reporting, width, height);
+    const fraudPts = seriesToPoints(data.fraud, width, height);
+    const profilePts = seriesToPoints(data.profile, width, height);
+    const reportingLine = smoothPath(reportingPts);
+    const fraudLine = smoothPath(fraudPts);
+    const profileLine = smoothPath(profilePts);
+
     return `
-      <div class="st-plot" role="img" aria-label="Consumer lag">
-        ${axisFrame(CHART_Y, CHART_X)}
-        <div class="st-plot__canvas st-plot__canvas--lag">
+      <div class="st-plot" role="img" aria-label="Consumer lag for ${escapeHtmlAttr(lagRange)}">
+        ${axisFrame(data.yLabels, data.xLabels)}
+        <div class="st-plot__canvas">
           ${plotGrid()}
-          <svg class="st-plot__series" viewBox="0 0 348 120" preserveAspectRatio="none" aria-hidden="true">
+          <svg class="st-plot__series" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-hidden="true">
             <defs>
-              <linearGradient id="st-lag-glow" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stop-color="#15B3FA" stop-opacity="0.32"/>
+              <linearGradient id="st-lag-reporting-glow" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#15B3FA" stop-opacity="0.28"/>
                 <stop offset="100%" stop-color="#15B3FA" stop-opacity="0"/>
               </linearGradient>
+              <linearGradient id="st-lag-fraud-glow" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#9568FF" stop-opacity="0.22"/>
+                <stop offset="100%" stop-color="#9568FF" stop-opacity="0"/>
+              </linearGradient>
+              <linearGradient id="st-lag-profile-glow" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#66CF47" stop-opacity="0.2"/>
+                <stop offset="100%" stop-color="#66CF47" stop-opacity="0"/>
+              </linearGradient>
             </defs>
-            <g transform="translate(0 4)">
-              <path d="${PATH_LAG_BLUE} L346 101 L-2 101 Z" fill="url(#st-lag-glow)"/>
-              <path d="${PATH_LAG_BLUE}" fill="none" stroke="#15B3FA" stroke-width="2" vector-effect="non-scaling-stroke"/>
-            </g>
-            <g transform="translate(0 78)">
-              <path d="${PATH_LAG_PURPLE}" fill="none" stroke="#9568FF" stroke-width="1.8" vector-effect="non-scaling-stroke"/>
-            </g>
-            <g transform="translate(0 100)">
-              <path d="${PATH_LAG_GREEN}" fill="none" stroke="#66CF47" stroke-width="1.8" vector-effect="non-scaling-stroke"/>
-            </g>
+            <path d="${areaFromLine(reportingPts, height)}" fill="url(#st-lag-reporting-glow)"/>
+            <path d="${areaFromLine(fraudPts, height)}" fill="url(#st-lag-fraud-glow)"/>
+            <path d="${areaFromLine(profilePts, height)}" fill="url(#st-lag-profile-glow)"/>
+            <path d="${reportingLine}" fill="none" stroke="#15B3FA" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+            <path d="${fraudLine}" fill="none" stroke="#9568FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+            <path d="${profileLine}" fill="none" stroke="#66CF47" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
           </svg>
         </div>
       </div>

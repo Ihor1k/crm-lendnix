@@ -712,10 +712,18 @@ export function StreamingTopicPage({
         event.preventDefault();
         const item = topic();
         const details = item ? selectedMessage(item) : null;
-        const customer = details?.payload?.customer_id || "";
+        const customer = String(
+          details?.payload?.customer_id
+          || details?.key?.replace(/\D/g, "").slice(-6)
+          || "",
+        ).trim();
         closeEvent(root);
-        showToast(customer ? `Opening customer ${customer}.` : "Opening Customer 360.");
-        window.location.hash = "#/customer-360";
+        if (!customer) {
+          showToast("No Customer ID found on this message.");
+          return;
+        }
+        showToast(`Opening customer ${customer}.`);
+        window.location.hash = `#/customer-360/${encodeURIComponent(customer)}`;
         return;
       }
 

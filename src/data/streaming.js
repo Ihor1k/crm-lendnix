@@ -237,7 +237,7 @@ function payloadForMessage(topic, message) {
     return {
       event_id: "01HX8Z7K7C8Q3W8V5T2D9E",
       event_type: "customer_profile_updated",
-      customer_id: "184729",
+      customer_id: customerIdFromKey(message.key),
       timestamp: "2025-05-14T09:31:22Z",
       source: "CRM System",
     };

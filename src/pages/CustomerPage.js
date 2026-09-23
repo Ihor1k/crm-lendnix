@@ -1,7 +1,7 @@
 import { AppShell, bindAppShell } from "../layout/AppShell.js";
 import { icons } from "../layout/icons.js";
 import { escapeHtml, escapeHtmlAttr } from "../utils/escapeHtml.js";
-import { getCustomer, searchCustomers } from "../data/customer.js";
+import { getCustomer, searchCustomers, ensureCustomer } from "../data/customer.js";
 import { createAlert } from "../data/alerts.js";
 import { hydrateSharedStore } from "../api/sharedStore.js";
 import { bone, createSkeletonLoader } from "../utils/skeleton.js";
@@ -14,8 +14,20 @@ const TABS = [
   { id: "risk", label: "Risk" },
 ];
 
-export function CustomerPage({ currentRoute = "/customer-360" } = {}) {
-  let selectedId = "184729";
+function customerIdFromRoute(customerId = "") {
+  if (customerId) return String(customerId).trim();
+  const hash = String(window.location.hash || "");
+  const query = hash.includes("?") ? hash.slice(hash.indexOf("?") + 1) : "";
+  const fromQuery = new URLSearchParams(query).get("id");
+  if (fromQuery) return fromQuery.trim();
+  const pathMatch = hash.match(/#\/customer-360\/([^/?#]+)/);
+  return pathMatch ? decodeURIComponent(pathMatch[1]).trim() : "";
+}
+
+export function CustomerPage({ currentRoute = "/customer-360", customerId = "" } = {}) {
+  const initialId = customerIdFromRoute(customerId);
+  let selectedId = initialId || "184729";
+  if (selectedId) ensureCustomer(selectedId);
   let query = "";
   let tab = "overview";
   let abort;
@@ -376,6 +388,7 @@ export function CustomerPage({ currentRoute = "/customer-360" } = {}) {
         return;
       }
       selectedId = matches[0].id;
+      ensureCustomer(selectedId);
       query = "";
       tab = "overview";
       paint(root);
