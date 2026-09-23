@@ -14,6 +14,13 @@ const TABS = [
   { id: "risk", label: "Risk" },
 ];
 
+function countryFlag(code) {
+  if (code === "US") return icons.flagUS;
+  if (code === "GB") return icons.flagGB;
+  if (code === "AU") return icons.flagAU;
+  return icons.flagDE;
+}
+
 function customerIdFromRoute(customerId = "") {
   if (customerId) return String(customerId).trim();
   const hash = String(window.location.hash || "");
@@ -81,7 +88,7 @@ export function CustomerPage({ currentRoute = "/customer-360", customerId = "" }
           <div class="c360-hero__meta">
             <span class="c360-badge is-active">${escapeHtml(customer.status)}</span>
             <span class="c360-badge is-vip">${icons.crown}${escapeHtml(customer.vip)}</span>
-            <span class="c360-badge is-country">${icons.flagDE}${escapeHtml(customer.country)}</span>
+            <span class="c360-badge is-country">${countryFlag(customer.countryCode)}${escapeHtml(customer.country)}</span>
             <span class="c360-meta">
               Risk:
               <span class="c360-badge is-risk">${escapeHtml(customer.risk)}</span>
